@@ -43,6 +43,7 @@ deploy
 
 # Other
 *.md
+!README.md
 LICENSE
 .codebuddy
 cls-search-log-test
