@@ -83,7 +83,8 @@ CQL_SYNTAX_GUIDE = """
 - 时间范围不宜过大，建议按需缩小范围以提高查询效率
 - SQL 分析语句中可使用 __TIMESTAMP__ 表示日志时间戳字段
 - ⏰ **start_time/end_time 为毫秒时间戳，请先调用 cls_convert_time 工具转换，不要手动计算**
-- 💡 **编写 SQL 分析语句前，建议先调用 cls_describe_index 获取目标主题的索引配置，确认字段名称、类型及是否开启统计，避免因字段信息不明确导致查询失败**""",
+- 💡 **编写 SQL 分析语句前，建议先调用 cls_describe_index 获取目标主题的索引配置，确认字段名称、类型及是否开启统计，避免因字段信息不明确导致查询失败**
+- region: 地域（可选），如 ap-guangzhou、na-ashburn，不传则使用默认地域，可通过 cls_describe_regions 查询所有可用地域""",
 )
 @handle_api_error
 async def cls_search_log(
@@ -173,7 +174,8 @@ async def cls_search_log(
 
 ### 注意事项
 - 支持传入毫秒时间戳（纯数字）或 `YYYY-mm-dd HH:MM:SS.FFF` 格式字符串
-- 毫秒精度会影响定位准确性，建议尽量使用精确的时间值""",
+- 毫秒精度会影响定位准确性，建议尽量使用精确的时间值
+- region: 地域（可选），如 ap-guangzhou、na-ashburn，不传则使用默认地域，可通过 cls_describe_regions 查询所有可用地域""",
 )
 @handle_api_error
 async def cls_get_log_context(
@@ -274,7 +276,8 @@ async def cls_get_log_context(
 
 ### 注意事项
 - ⏰ **start_time/end_time 为毫秒时间戳，请先调用 cls_convert_time 工具转换，不要手动计算**
-- 💡 **编写 SQL 分析语句前，建议先调用 cls_describe_index 获取目标主题的索引配置，确认字段名称、类型及是否开启统计，避免因字段信息不明确导致查询失败**""",
+- 💡 **编写 SQL 分析语句前，建议先调用 cls_describe_index 获取目标主题的索引配置，确认字段名称、类型及是否开启统计，避免因字段信息不明确导致查询失败**
+- region: 地域（可选），如 ap-guangzhou、na-ashburn，不传则使用默认地域，可通过 cls_describe_regions 查询所有可用地域""",
 )
 @handle_api_error
 async def cls_get_log_histogram(
@@ -337,6 +340,7 @@ async def cls_get_log_histogram(
 - query: CQL 检索语句（必填）
 - start_time: 起始时间，Unix 时间戳（毫秒）
 - end_time: 结束时间，Unix 时间戳（毫秒）
+- region: 地域（可选），如 ap-guangzhou、na-ashburn，不传则使用默认地域，可通过 cls_describe_regions 查询所有可用地域
 
 ### 适用场景
 - 快速确认某类日志是否存在

@@ -39,6 +39,7 @@ logger = logging.getLogger(__name__)
 - offset: 分页偏移量，默认 0
 - limit: 每页条数，默认 20
 - logset_name: 按日志集名称过滤（可选，模糊匹配）
+- region: 地域（可选），如 ap-guangzhou、na-ashburn，不传则使用默认地域，可通过 cls_describe_regions 查询所有可用地域
 
 ### 返回信息
 - 日志集 ID、名称、标签
@@ -96,7 +97,8 @@ async def cls_describe_logsets(
 ### 参数说明
 - logset_name: 日志集名称（必填），3-255 个字符
 - period: 日志保存天数（可选），默认 30，可选值: 1-3600 天，-1 表示永久
-- tags_json: 标签 JSON 对象字符串（可选），如 `{"env": "prod"}`""",
+- tags_json: 标签 JSON 对象字符串（可选），如 `{"env": "prod"}`
+- region: 地域（可选），如 ap-guangzhou、na-ashburn，不传则使用默认地域，可通过 cls_describe_regions 查询所有可用地域""",
 )
 @handle_api_error
 async def cls_create_logset(
@@ -134,7 +136,8 @@ async def cls_create_logset(
     description="""删除日志集。删除前需确保日志集下无日志主题，否则会失败。
 
 ### 参数说明
-- logset_id: 日志集 ID（必填）""",
+- logset_id: 日志集 ID（必填）
+- region: 地域（可选），如 ap-guangzhou、na-ashburn，不传则使用默认地域，可通过 cls_describe_regions 查询所有可用地域""",
 )
 @handle_api_error
 async def cls_delete_logset(
@@ -167,6 +170,7 @@ async def cls_delete_logset(
 - limit: 每页条数，默认 20
 - logset_id: 按日志集 ID 过滤（可选）
 - topic_name: 按日志主题名称过滤（可选，模糊匹配）
+- region: 地域（可选），如 ap-guangzhou、na-ashburn，不传则使用默认地域，可通过 cls_describe_regions 查询所有可用地域
 
 ### 返回信息
 - 日志主题 ID、名称、所属日志集
@@ -236,7 +240,8 @@ async def cls_describe_topics(
     description="""获取日志主题详情。查看日志主题的完整配置信息。
 
 ### 参数说明
-- topic_id: 日志主题 ID（必填）""",
+- topic_id: 日志主题 ID（必填）
+- region: 地域（可选），如 ap-guangzhou、na-ashburn，不传则使用默认地域，可通过 cls_describe_regions 查询所有可用地域""",
 )
 @handle_api_error
 async def cls_describe_topic_detail(
@@ -299,7 +304,8 @@ async def cls_describe_topic_detail(
 - period: 日志保存天数（可选），默认继承日志集配置
 - storage_type: 存储类型（可选），`hot`（标准存储）或 `cold`（低频存储）
 - auto_split: 是否开启自动分裂（可选），默认 true
-- describes: 描述信息（可选）""",
+- describes: 描述信息（可选）
+- region: 地域（可选），如 ap-guangzhou、na-ashburn，不传则使用默认地域，可通过 cls_describe_regions 查询所有可用地域""",
 )
 @handle_api_error
 async def cls_create_topic(
@@ -344,7 +350,8 @@ async def cls_create_topic(
 - period: 新保存天数（可选）
 - status: 是否开启采集，true 开启 / false 关闭（可选）
 - auto_split: 是否自动分裂（可选）
-- describes: 描述信息（可选）""",
+- describes: 描述信息（可选）
+- region: 地域（可选），如 ap-guangzhou、na-ashburn，不传则使用默认地域，可通过 cls_describe_regions 查询所有可用地域""",
 )
 @handle_api_error
 async def cls_modify_topic(
@@ -393,7 +400,8 @@ async def cls_modify_topic(
     description="""删除日志主题。删除后该主题下的所有日志数据将被清除，不可恢复。
 
 ### 参数说明
-- topic_id: 日志主题 ID（必填）""",
+- topic_id: 日志主题 ID（必填）
+- region: 地域（可选），如 ap-guangzhou、na-ashburn，不传则使用默认地域，可通过 cls_describe_regions 查询所有可用地域""",
 )
 @handle_api_error
 async def cls_delete_topic(
@@ -423,6 +431,7 @@ async def cls_delete_topic(
 
 ### 参数说明
 - topic_id: 日志主题 ID（必填）
+- region: 地域（可选），如 ap-guangzhou、na-ashburn，不传则使用默认地域，可通过 cls_describe_regions 查询所有可用地域
 
 ### 返回信息
 - 全文索引配置（是否开启、分词符等）
@@ -509,7 +518,8 @@ async def cls_describe_index(
 - status: 是否开启索引，默认 true
 
 ### 注意
-修改索引配置后，新的配置仅对后续写入的日志生效，已有日志不会重新索引。""",
+修改索引配置后，新的配置仅对后续写入的日志生效，已有日志不会重新索引。
+- region: 地域（可选），如 ap-guangzhou、na-ashburn，不传则使用默认地域，可通过 cls_describe_regions 查询所有可用地域""",
 )
 @handle_api_error
 async def cls_modify_index(
@@ -575,7 +585,8 @@ async def cls_modify_index(
 ### 参数说明
 - offset: 分页偏移量，默认 0
 - limit: 每页条数，默认 20
-- group_name: 按机器组名称过滤（可选）""",
+- group_name: 按机器组名称过滤（可选）
+- region: 地域（可选），如 ap-guangzhou、na-ashburn，不传则使用默认地域，可通过 cls_describe_regions 查询所有可用地域""",
 )
 @handle_api_error
 async def cls_describe_machine_groups(
@@ -624,7 +635,8 @@ async def cls_describe_machine_groups(
     description="""获取机器组详情和机器状态。查看机器组的配置信息和组内机器的在线状态。
 
 ### 参数说明
-- group_id: 机器组 ID（必填）""",
+- group_id: 机器组 ID（必填）
+- region: 地域（可选），如 ap-guangzhou、na-ashburn，不传则使用默认地域，可通过 cls_describe_regions 查询所有可用地域""",
 )
 @handle_api_error
 async def cls_describe_machine_group_detail(
@@ -689,7 +701,8 @@ async def cls_describe_machine_group_detail(
 ### 参数说明
 - offset: 分页偏移量，默认 0
 - limit: 每页条数，默认 20
-- dashboard_name: 按仪表盘名称过滤（可选）""",
+- dashboard_name: 按仪表盘名称过滤（可选）
+- region: 地域（可选），如 ap-guangzhou、na-ashburn，不传则使用默认地域，可通过 cls_describe_regions 查询所有可用地域""",
 )
 @handle_api_error
 async def cls_describe_dashboards(

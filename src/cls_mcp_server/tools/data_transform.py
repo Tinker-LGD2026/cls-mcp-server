@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 - limit: 每页条数，默认 20
 - task_name: 按任务名称过滤（可选）
 - topic_id: 按源日志主题 ID 过滤（可选）
+- region: 地域（可选），如 ap-guangzhou、na-ashburn，不传则使用默认地域，可通过 cls_describe_regions 查询所有可用地域
 
 ### 返回信息
 - 任务 ID、名称、状态（运行中/已停止/异常等）
@@ -112,7 +113,8 @@ async def cls_describe_data_transform_tasks(
 ### DSL 语句示例
 - 丢弃特定字段: `e_drop_fields("debug_info")`
 - 过滤日志: `e_if(e_match("level", "DEBUG"), DROP)`
-- 字段重命名: `e_rename("old_name", "new_name")`""",
+- 字段重命名: `e_rename("old_name", "new_name")`
+- region: 地域（可选），如 ap-guangzhou、na-ashburn，不传则使用默认地域，可通过 cls_describe_regions 查询所有可用地域""",
 )
 @handle_api_error
 async def cls_create_data_transform(
@@ -154,10 +156,8 @@ async def cls_create_data_transform(
     description="""删除数据加工任务。停止并删除指定的数据加工任务。
 
 ### 参数说明
-- task_id: 数据加工任务 ID（必填）""",
-)
-@handle_api_error
-async def cls_delete_data_transform(
+- task_id: 数据加工任务 ID（必填）
+- region: 地域（可选），如 ap-guangzhou、na-ashburn，不传则使用默认地域，可通过 cls_describe_regions 查询所有可用地域""",
     task_id: str,
     region: str = "",
 ) -> str:

@@ -29,6 +29,7 @@ logger = logging.getLogger(__name__)
 - limit: 每页条数，默认 20
 - task_name: 按任务名称过滤（可选）
 - src_topic_id: 按源日志主题 ID 过滤（可选）
+- region: 地域（可选），如 ap-guangzhou、na-ashburn，不传则使用默认地域，可通过 cls_describe_regions 查询所有可用地域
 
 ### 返回信息
 - 任务 ID、名称、状态
@@ -118,6 +119,7 @@ async def cls_describe_scheduled_sql_tasks(
 - process_period: 调度周期（分钟，必填），如 5、15、60
 - process_time_window: 每次处理的时间窗口（分钟，必填），通常与调度周期相同
 - process_delay: 延迟处理时间（秒，可选），默认 0
+- region: 地域（可选），如 ap-guangzhou、na-ashburn，不传则使用默认地域，可通过 cls_describe_regions 查询所有可用地域
 
 ### SQL 示例
 - 每5分钟统计各状态码数量:
@@ -167,7 +169,8 @@ async def cls_create_scheduled_sql(
     description="""删除定时 SQL 任务。停止并删除指定的定时 SQL 分析任务。
 
 ### 参数说明
-- task_id: 定时 SQL 任务 ID（必填）""",
+- task_id: 定时 SQL 任务 ID（必填）
+- region: 地域（可选），如 ap-guangzhou、na-ashburn，不传则使用默认地域，可通过 cls_describe_regions 查询所有可用地域""",
 )
 @handle_api_error
 async def cls_delete_scheduled_sql(

@@ -37,6 +37,7 @@ logger = logging.getLogger(__name__)
 - limit: 每页条数，默认 20，最大 100
 - name: 按告警策略名称过滤（可选，模糊匹配）
 - topic_id: 按关联日志主题 ID 过滤（可选）
+- region: 地域（可选），如 ap-guangzhou、na-ashburn，不传则使用默认地域，可通过 cls_describe_regions 查询所有可用地域
 
 ### 返回信息
 - 告警策略 ID、名称、状态（开启/关闭）
@@ -105,6 +106,7 @@ async def cls_describe_alarms(
 
 ### 参数说明
 - alarm_id: 告警策略 ID（必填）
+- region: 地域（可选），如 ap-guangzhou、na-ashburn，不传则使用默认地域，可通过 cls_describe_regions 查询所有可用地域
 
 ### 返回信息
 - 完整的告警配置：名称、监控条件、触发规则
@@ -175,7 +177,8 @@ async def cls_describe_alarm_detail(
 ### 参数说明
 - offset: 分页偏移量，默认 0
 - limit: 每页条数，默认 20
-- name: 按通知名称过滤（可选）""",
+- name: 按通知名称过滤（可选）
+- region: 地域（可选），如 ap-guangzhou、na-ashburn，不传则使用默认地域，可通过 cls_describe_regions 查询所有可用地域""",
 )
 @handle_api_error
 async def cls_describe_alarm_notices(
@@ -241,7 +244,8 @@ async def cls_describe_alarm_notices(
 - 了解最近告警的总体趋势
 
 ### 注意事项
-- ⏰ **start_time/end_time 为毫秒时间戳，请先调用 cls_convert_time 工具转换，不要手动计算**""",
+- ⏰ **start_time/end_time 为毫秒时间戳，请先调用 cls_convert_time 工具转换，不要手动计算**
+- region: 地域（可选），如 ap-guangzhou、na-ashburn，不传则使用默认地域，可通过 cls_describe_regions 查询所有可用地域""",
 )
 @handle_api_error
 async def cls_describe_alarm_records(
@@ -366,6 +370,7 @@ async def cls_describe_alarm_records(
 - trigger_count: 连续触发次数阈值（必填），建议至少 1
 - alarm_period: 告警周期（分钟），如 15
 - alarm_notice_ids: 通知渠道 ID 列表（JSON 数组字符串），如 `["notice-xxx"]`
+- region: 地域（可选），如 ap-guangzhou、na-ashburn，不传则使用默认地域，可通过 cls_describe_regions 查询所有可用地域
 
 ### 示例
 创建一个"5分钟内错误日志超100条"的告警:
@@ -430,6 +435,7 @@ async def cls_create_alarm(
 - condition: 新的触发条件（可选）
 - status: 告警状态，true 开启 / false 关闭（可选）
 - alarm_period: 新的告警周期（分钟，可选）
+- region: 地域（可选），如 ap-guangzhou、na-ashburn，不传则使用默认地域，可通过 cls_describe_regions 查询所有可用地域
 
 ### 注意
 仅传入需要修改的字段，未传入的字段保持不变。""",
@@ -480,7 +486,8 @@ async def cls_modify_alarm(
     description="""删除告警策略。删除后不可恢复，相关的告警监控将停止。
 
 ### 参数说明
-- alarm_id: 要删除的告警策略 ID（必填）""",
+- alarm_id: 要删除的告警策略 ID（必填）
+- region: 地域（可选），如 ap-guangzhou、na-ashburn，不传则使用默认地域，可通过 cls_describe_regions 查询所有可用地域""",
 )
 @handle_api_error
 async def cls_delete_alarm(

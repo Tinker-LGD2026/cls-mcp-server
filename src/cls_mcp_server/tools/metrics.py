@@ -33,6 +33,7 @@ logger = logging.getLogger(__name__)
 - topic_id: 指标主题 ID（必填），注意是时序指标主题 ID，非普通日志主题 ID
 - query: 指标查询语句（必填），PromQL 兼容语法
 - time: 查询时间点，Unix 时间戳（秒），默认当前时间
+- region: 地域（可选），如 ap-guangzhou、na-ashburn，不传则使用默认地域，可通过 cls_describe_regions 查询所有可用地域
 
 ### PromQL 示例
 - `metric_name` — 查询单个指标当前值
@@ -87,6 +88,7 @@ async def cls_query_metric(
 - start_time: 起始时间，Unix 时间戳（秒）
 - end_time: 结束时间，Unix 时间戳（秒）
 - step: 步长（秒），数据点之间的间隔，默认 60
+- region: 地域（可选），如 ap-guangzhou、na-ashburn，不传则使用默认地域，可通过 cls_describe_regions 查询所有可用地域
 
 ### 适用场景
 - 查看指标随时间的变化趋势
@@ -143,6 +145,7 @@ async def cls_query_range_metric(
 - topic_id: 指标主题 ID（必填），注意是时序指标主题 ID，非普通日志主题 ID
 - start_time: 起始时间，Unix 时间戳（秒）
 - end_time: 结束时间，Unix 时间戳（秒）
+- region: 地域（可选），如 ap-guangzhou、na-ashburn，不传则使用默认地域，可通过 cls_describe_regions 查询所有可用地域
 
 ### 使用场景
 - 在使用 cls_query_metric / cls_query_range_metric 查询指标前，先列出可用指标
@@ -180,9 +183,4 @@ async def cls_list_metrics(
     parts.append("")
 
     if values:
-        for name in sorted(values):
-            parts.append(f"  - {name}")
-    else:
-        parts.append("（该时间范围内无指标数据）")
-
-    return "\n".join(parts)
+        for name in sorted(val
