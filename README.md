@@ -91,53 +91,64 @@
 
 ## 快速开始
 
-### 方式一：PyPI 安装（推荐）
+先确认你的使用场景，选择对应章节：
+
+| 场景 | 说明 | 跳转 |
+|------|------|------|
+| **本地使用** | 在自己电脑上配合 Claude Desktop / Cursor / VS Code 等 IDE 使用 | [场景一：本地 stdio 模式](#场景一本地-stdio-模式) |
+| **远程服务** | 部署到服务器，团队共用或远程访问 | [场景二：远程服务模式](#场景二远程服务模式) |
+
+---
+
+### 环境准备
+
+#### 1. 安装 uv（Python 包管理器）
+
+[uv](https://docs.astral.sh/uv/) 是一个极快的 Python 包管理器，本项目推荐使用。如已安装可跳过。
 
 ```bash
-# 使用 uvx 直接运行
-uvx cls-mcp-server --help
+# macOS / Linux
+curl -LsSf https://astral.sh/uv/install.sh | sh
 
-# 或使用 pip 安装
-pip install cls-mcp-server
+# 安装完成后，让命令生效（二选一）：
+source $HOME/.local/bin/env    # 立即生效
+# 或者关闭终端重新打开          # 重启终端也行
 ```
 
-### 方式二：Docker 运行
+```powershell
+# Windows (PowerShell)
+powershell -ExecutionPolicy ByPass -c "irm https://astral.sh/uv/install.ps1 | iex"
+```
+
+验证安装成功：
 
 ```bash
-docker run -d \
-  -p 8000:8000 \
-  -e CLS_SECRET_ID=your-secret-id \
-  -e CLS_SECRET_KEY=your-secret-key \
-  -e CLS_REGION=ap-guangzhou \
-  ghcr.io/tinker-lgd2026/cls-mcp-server:latest
+uv --version
+# 预期输出: uv 0.11.x（版本号可能不同）
 ```
 
-### 方式三：源码安装
+> **没有 uv？** 也可以用 `pip install cls-mcp-server` 安装，但 uv 更快且能自动管理 Python 版本。
 
-```bash
-git clone https://github.com/Tinker-LGD2026/cls-mcp-server.git
-cd cls-mcp-server
-uv sync
-uv run cls-mcp-server --help
-```
+#### 2. 获取腾讯云密钥
 
-## 配置
+访问 [腾讯云控制台 - API 密钥管理](https://console.cloud.tencent.com/cam/capi)，获取 `SecretId` 和 `SecretKey`。
 
-### 环境变量
+---
 
-| 变量 | 必填 | 默认值 | 说明 |
-|------|------|--------|------|
-| `CLS_SECRET_ID` | 是 | — | 腾讯云 API SecretId |
-| `CLS_SECRET_KEY` | 是 | — | 腾讯云 API SecretKey |
-| `CLS_REGION` | 是 | `ap-guangzhou` | 地域 |
-| `CLS_TRANSPORT` | 否 | `stdio` | 传输方式：`stdio` / `sse` / `streamable-http` |
-| `MCP_AUTH_TOKEN` | 否 | — | HTTP Bearer Token 认证（SSE/Streamable HTTP 模式） |
-| `CLS_ENABLE_WRITE` | 否 | `false` | 启用写操作工具 |
-| `CLS_ENABLE_DANGEROUS` | 否 | `false` | 启用危险操作工具 |
+### 场景一：本地 stdio 模式
 
-### MCP 客户端配置
+适合在自己电脑上使用，MCP 客户端（Claude Desktop / Cursor 等）自动拉起 Server 进程，无需手动启动服务。
 
-**Claude Desktop / Cursor**（stdio 模式）：
+#### 第一步：配置 MCP 客户端
+
+选择你使用的客户端，将以下配置写入对应的配置文件：
+
+<details>
+<summary><b>Claude Desktop</b></summary>
+
+配置文件位置：
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
 
 ```json
 {
@@ -146,8 +157,8 @@ uv run cls-mcp-server --help
       "command": "uvx",
       "args": ["cls-mcp-server"],
       "env": {
-        "CLS_SECRET_ID": "your-secret-id",
-        "CLS_SECRET_KEY": "your-secret-key",
+        "CLS_SECRET_ID": "替换为你的SecretId",
+        "CLS_SECRET_KEY": "替换为你的SecretKey",
         "CLS_REGION": "ap-guangzhou"
       }
     }
@@ -155,62 +166,207 @@ uv run cls-mcp-server --help
 }
 ```
 
-**远程服务**（Streamable HTTP 模式，推荐）：
+</details>
+
+<details>
+<summary><b>Cursor</b></summary>
+
+配置文件位置：`~/.cursor/mcp.json`
 
 ```json
 {
   "mcpServers": {
     "cls": {
-      "url": "https://your-server:8000/mcp",
-      "headers": {
-        "Authorization": "Bearer your-token"
+      "command": "uvx",
+      "args": ["cls-mcp-server"],
+      "env": {
+        "CLS_SECRET_ID": "替换为你的SecretId",
+        "CLS_SECRET_KEY": "替换为你的SecretKey",
+        "CLS_REGION": "ap-guangzhou"
       }
     }
   }
 }
 ```
 
-**远程服务**（SSE 模式，兼容旧版客户端）：
+</details>
+
+<details>
+<summary><b>VS Code (Copilot)</b></summary>
+
+在 VS Code 的 `settings.json` 中添加：
 
 ```json
 {
-  "mcpServers": {
-    "cls": {
-      "url": "https://your-server:8000/sse",
-      "headers": {
-        "Authorization": "Bearer your-token"
+  "mcp": {
+    "servers": {
+      "cls": {
+        "command": "uvx",
+        "args": ["cls-mcp-server"],
+        "env": {
+          "CLS_SECRET_ID": "替换为你的SecretId",
+          "CLS_SECRET_KEY": "替换为你的SecretKey",
+          "CLS_REGION": "ap-guangzhou"
+        }
       }
     }
   }
 }
 ```
 
-> SSE 模式端点为 `/sse`，Streamable HTTP 模式端点为 `/mcp`。新部署推荐使用 Streamable HTTP，SSE 模式主要用于兼容不支持 Streamable HTTP 的旧版 MCP 客户端。
+</details>
 
-## 部署
+> **说明**：`uvx` 会自动从 PyPI 下载并运行 `cls-mcp-server`，无需手动 `pip install`。`CLS_REGION` 改为你的日志所在地域（如 `ap-shanghai`、`ap-beijing`）。
 
-支持多种部署方式：
+#### 第二步：重启客户端
 
-| 方式 | 适用场景 |
-|------|----------|
-| PyPI (`uvx` / `pip`) | 本地开发，stdio 模式 |
-| Docker / Docker Compose | 远程服务，生产环境 |
-| systemd + 一键脚本 | 传统虚拟机部署 |
-| Kubernetes / Helm | 容器编排环境 |
+保存配置后，**重启** Claude Desktop / Cursor / VS Code，客户端会自动拉起 CLS MCP Server。
 
-详细部署指南请参考 [docs/deployment-guide.md](docs/deployment-guide.md)。
+#### 第三步：验证
 
-## 国内环境
+在客户端中发送一条消息测试：
 
-如果 pip / Docker 下载速度慢，可使用国内镜像源：
+```
+帮我查看 CLS 支持哪些地域
+```
+
+如果返回了地域列表（广州、上海、北京等），说明连接成功。
+
+#### 其他安装方式
+
+如果不想用 `uvx`，也可以手动安装后在配置中使用 `cls-mcp-server` 命令：
+
+```bash
+# 方式一：pip 安装（适合已有 pip 工作流的用户）
+pip install cls-mcp-server
+
+# 方式二：源码安装（适合需要修改源码的开发者）
+git clone https://github.com/Tinker-LGD2026/cls-mcp-server.git
+cd cls-mcp-server
+uv sync
+# 验证: uv run cls-mcp-server --help
+```
+
+使用 `pip install` 安装后，客户端配置中把 `"command": "uvx"` 改为 `"command": "cls-mcp-server"`，`"args"` 改为 `[]` 即可。
+
+---
+
+### 场景二：远程服务模式
+
+适合将 Server 部署到服务器上，作为独立 HTTP 服务运行，供远程 MCP 客户端连接。
+
+#### 方式一：Docker 部署（推荐，最简单）
+
+一条命令即可启动，无需安装 Python 或任何依赖：
+
+```bash
+docker run -d \
+  --name cls-mcp-server \
+  -p 8000:8000 \
+  -e CLS_SECRET_ID=替换为你的SecretId \
+  -e CLS_SECRET_KEY=替换为你的SecretKey \
+  -e CLS_REGION=ap-guangzhou \
+  ghcr.io/tinker-lgd2026/cls-mcp-server:latest
+```
+
+验证服务是否启动成功：
+
+```bash
+curl http://localhost:8000/health
+# 预期输出: {"status":"ok","version":"0.1.0","transport":"streamable-http"}
+```
+
+#### 方式二：一键部署脚本（适合无 Docker 的虚拟机）
+
+支持 CentOS 7+、Ubuntu 18.04+、Debian 10+，脚本自动安装 uv + Python 3.12 + 依赖 + 注册 systemd 服务，**零前置依赖**：
+
+```bash
+# 1. 将源码上传到服务器（git clone 或 tar.gz 打包上传）
+git clone https://github.com/Tinker-LGD2026/cls-mcp-server.git
+cd cls-mcp-server
+
+# 2. 运行一键部署脚本
+sudo bash deploy/systemd/install.sh
+
+# 3. 编辑配置文件，填入真实密钥
+sudo vim /opt/cls-mcp-server/.env
+
+# 4. 启动服务
+sudo systemctl start cls-mcp-server
+
+# 5. 验证
+curl http://127.0.0.1:8000/health
+```
+
+> **CentOS 7 用户**：不用担心 Python 版本问题，脚本通过 uv 自动下载 Python 3.12，不影响系统自带 Python。如果 git clone 太慢，可以在本地打包后 scp 上传，详见 [部署手册 - systemd 部署](docs/deployment-guide.md#43-systemd-服务虚拟机部署)。
+
+#### 客户端连接远程服务
+
+服务启动后，在 MCP 客户端中配置远程连接：
+
+```json
+{
+  "mcpServers": {
+    "cls": {
+      "url": "http://你的服务器IP:8000/mcp"
+    }
+  }
+}
+```
+
+> 如需 SSE 模式（兼容旧版客户端），端点改为 `/sse`。如已设置 Bearer Token 认证，需添加 `"headers": {"Authorization": "Bearer 你的token"}`。
+
+---
+
+## 配置参考
+
+### 环境变量
+
+| 变量 | 必填 | 默认值 | 说明 |
+|------|------|--------|------|
+| `CLS_SECRET_ID` | 是 | — | 腾讯云 API SecretId |
+| `CLS_SECRET_KEY` | 是 | — | 腾讯云 API SecretKey |
+| `CLS_REGION` | 是 | `ap-guangzhou` | 地域（如 `ap-shanghai`、`ap-beijing`） |
+| `CLS_TRANSPORT` | 否 | `stdio` | 传输方式：`stdio` / `sse` / `streamable-http` |
+| `CLS_HOST` | 否 | `0.0.0.0` | HTTP 监听地址（远程模式） |
+| `CLS_PORT` | 否 | `8000` | HTTP 监听端口（远程模式） |
+| `MCP_AUTH_TOKEN` | 否 | — | HTTP Bearer Token 认证（远程模式，建议开启） |
+| `CLS_ENABLE_WRITE` | 否 | `false` | 启用写操作工具（创建/修改） |
+| `CLS_ENABLE_DANGEROUS` | 否 | `false` | 启用危险操作工具（删除，需同时开启写操作） |
+| `CLS_LOG_LEVEL` | 否 | `INFO` | 日志级别：`DEBUG` / `INFO` / `WARNING` / `ERROR` |
+
+---
+
+## 部署指南
+
+除了上面"快速开始"中的 Docker 和一键脚本，还支持更多部署方式：
+
+| 方式 | 适用场景 | 文档 |
+|------|----------|------|
+| Docker / Docker Compose | 远程服务，生产环境推荐 | [详细说明](docs/deployment-guide.md#5-docker-部署) |
+| systemd + 一键脚本 | 传统虚拟机（CentOS/Ubuntu） | [详细说明](docs/deployment-guide.md#43-systemd-服务虚拟机部署) |
+| Kubernetes / Helm | 容器编排，多副本水平扩展 | [详细说明](docs/deployment-guide.md#6-kubernetes-部署) |
+| Nginx 反向代理 + HTTPS | 生产环境 TLS 终结 | [详细说明](docs/deployment-guide.md#44-nginx-反向代理) |
+| HTTP Bearer Token 认证 | 远程服务访问控制 | [详细说明](docs/deployment-guide.md#7-http-认证bearer-token) |
+
+完整部署手册请参考 [docs/deployment-guide.md](docs/deployment-guide.md)。
+
+---
+
+## 国内环境加速
+
+如果 pip / Docker / uv 下载速度慢：
 
 ```bash
 # pip 使用清华源
 pip install cls-mcp-server -i https://pypi.tuna.tsinghua.edu.cn/simple
+
+# uv 使用国内源
+UV_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple uvx cls-mcp-server --help
 ```
 
-更多加速方案请参考 [部署手册 - 国内环境加速](docs/deployment-guide.md#9-国内环境加速)。
+更多加速方案（Docker 镜像加速、uv 离线安装、GitHub 代理等）请参考 [部署手册 - 国内环境加速](docs/deployment-guide.md#9-国内环境加速)。
 
 ## 许可证
 
-[Apache-2.0](LICENSE
+[Apache-2.0](LICENSE)
