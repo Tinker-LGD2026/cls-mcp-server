@@ -1,0 +1,104 @@
+# CLS MCP Server - Helm Chart 默认配置
+
+# 副本数
+replicaCount: 2
+
+image:
+  repository: cls-mcp-server
+  tag: "latest"
+  pullPolicy: IfNotPresent
+
+# 腾讯云密钥（必填，建议通过 --set 或 外部 Secret 注入）
+secret:
+  # 设为 true 时 Chart 自动创建 Secret；false 时需手动创建同名 Secret
+  create: true
+  secretId: ""
+  secretKey: ""
+  # HTTP Bearer Token 认证（建议生产环境设置）
+  authToken: ""
+
+# 服务配置
+config:
+  region: "ap-guangzhou"
+  transport: "streamable-http"
+  host: "0.0.0.0"
+  port: 8000
+  statelessHttp: true
+  enableWrite: false
+  enableDangerous: false
+  logLevel: "INFO"
+
+# Service 配置
+service:
+  type: ClusterIP
+  port: 8000
+  # SSE 模式建议开启 session affinity
+  sessionAffinity: None
+  # sessionAffinityConfig:
+  #   clientIP:
+  #     timeoutSeconds: 3600
+
+# Ingress 配置
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+    # nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    # nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    # nginx.ingress.kubernetes.io/proxy-buffering: "off"
+  hosts:
+    - host: cls-mcp.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+  #  - secretName: cls-mcp-tls
+  #    hosts:
+  #      - cls-mcp.example.com
+
+# 资源限制
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi
+
+# 健康检查
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 30
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+readinessProbe:
+  httpGet:
+    path: /readiness
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 5
+  failureThreshold: 3
+
+# Pod 安全上下文
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+
+# 自动扩缩容（可选）
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 80
+
+# 节点选择和容忍
+nodeSelector: {}
+tolerations: []
+affinity: {}

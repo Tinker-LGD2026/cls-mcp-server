@@ -1,0 +1,45 @@
+[Unit]
+Description=CLS MCP Server - 腾讯云日志服务 MCP Server
+Documentation=https://github.com/Tinker-LGD2026/cls-mcp-server
+After=network.target
+
+[Service]
+Type=simple
+User=cls-mcp
+Group=cls-mcp
+WorkingDirectory=/opt/cls-mcp-server
+
+# 环境变量文件（权限建议 600，仅 cls-mcp 用户可读）
+EnvironmentFile=/opt/cls-mcp-server/.env
+
+# 启动命令
+ExecStart=/opt/cls-mcp-server/.venv/bin/cls-mcp-server \
+    --transport streamable-http \
+    --host 0.0.0.0 \
+    --port 8000
+
+# 自动重启
+Restart=on-failure
+RestartSec=5
+
+# 日志输出到 journald
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=cls-mcp-server
+
+# 安全加固（兼容 CentOS 7 / systemd 219+）
+# 注意：以下指令需要 systemd 232+，CentOS 7 (systemd 219) 不支持：
+#   NoNewPrivileges=yes
+#   ProtectSystem=strict
+#   ProtectHome=yes
+#   ReadWritePaths=/opt/cls-mcp-server
+#   PrivateTmp=yes
+# 如果你的系统是 CentOS 8+ / Ubuntu 18.04+ / Debian 10+，可取消注释以启用沙箱：
+# NoNewPrivileges=yes
+# ProtectSystem=strict
+# ProtectHome=yes
+# ReadWritePaths=/opt/cls-mcp-server
+# PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,26 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.env
+.venv/
+venv/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+*.log
+.DS_Store
+.idea/
+.vscode/
+.codebuddy/
+
+# 打包产物
+*.tar.gz
+
+# 临时文件
+需求大纲
+cls-search-log-test/

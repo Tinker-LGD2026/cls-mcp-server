@@ -1,0 +1,17 @@
+# CLS MCP Server - Kubernetes ConfigMap
+# 非敏感配置项
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cls-mcp-server-config
+  labels:
+    app: cls-mcp-server
+data:
+  CLS_REGION: "ap-guangzhou"
+  CLS_TRANSPORT: "streamable-http"
+  CLS_HOST: "0.0.0.0"
+  CLS_PORT: "8000"
+  CLS_STATELESS_HTTP: "true"
+  CLS_ENABLE_WRITE: "false"
+  CLS_ENABLE_DANGEROUS: "false"
+  CLS_LOG_LEVEL: "INFO"

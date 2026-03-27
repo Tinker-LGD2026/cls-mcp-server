@@ -1,0 +1,82 @@
+# ============================================================
+# PyPI 自动发布工作流
+# ============================================================
+# 触发条件：推送以 v 开头的 Tag（如 v0.1.0、v1.0.0）
+# 前提：需要在 GitHub 仓库 Settings > Secrets 中配置 PYPI_API_TOKEN
+#
+# 获取 PyPI Token 步骤：
+#   1. 注册 https://pypi.org 账号
+#   2. 进入 Account Settings > API tokens
+#   3. 创建 token（Scope 选 Entire account 或指定项目）
+#   4. 复制 token，到 GitHub 仓库 Settings > Secrets and variables > Actions
+#   5. 点 "New repository secret"，Name 填 PYPI_API_TOKEN，Value 粘贴 token
+# ============================================================
+
+name: Publish to PyPI
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-and-publish:
+    name: Build & Publish to PyPI
+    runs-on: ubuntu-latest
+    # 推荐：使用 GitHub 的 Trusted Publisher（OIDC），更安全
+    # 如果配置了 Trusted Publisher，可以去掉 password，改用 permissions
+    permissions:
+      contents: read
+      id-token: write  # 用于 Trusted Publisher（可选）
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tools
+        run: pip install build
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          TAG="${GITHUB_REF#refs/tags/v}"
+          echo "version=$TAG" >> "$GITHUB_OUTPUT"
+          echo "Building version: $TAG"
+
+      - name: Verify version consistency
+        run: |
+          TAG_VERSION="${{ steps.version.outputs.version }}"
+          PKG_VERSION=$(python -c "
+          import tomllib
+          with open('pyproject.toml', 'rb') as f:
+              data = tomllib.load(f)
+          print(data['project']['version'])
+          ")
+          echo "Tag version: $TAG_VERSION"
+          echo "Package version: $PKG_VERSION"
+          if [ "$TAG_VERSION" != "$PKG_VERSION" ]; then
+            echo "::error::Version mismatch! Tag=$TAG_VERSION, pyproject.toml=$PKG_VERSION"
+            exit 1
+          fi
+
+      - name: Build package
+        run: python -m build
+
+      - name: Verify build artifacts
+        run: |
+          ls -la dist/
+          pip install dist/*.whl
+          cls-mcp-server --help
+
+      # 方式一：使用 API Token（推荐新手使用）
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          # 首次发布前，可先发到 TestPyPI 验证：
+          # repository-url: https://test.pypi.org/legacy/

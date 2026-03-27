@@ -1,0 +1,31 @@
+# CLS MCP Server - Kubernetes Ingress (可选)
+# 根据实际 Ingress Controller 调整 annotations
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: cls-mcp-server
+  labels:
+    app: cls-mcp-server
+  annotations:
+    # Nginx Ingress Controller 示例
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    # SSE 长连接支持
+    nginx.ingress.kubernetes.io/proxy-buffering: "off"
+spec:
+  rules:
+    - host: cls-mcp.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: cls-mcp-server
+                port:
+                  number: 8000
+  # TLS 配置（可选）
+  # tls:
+  #   - hosts:
+  #       - cls-mcp.example.com
+  #     secretName: cls-mcp-tls

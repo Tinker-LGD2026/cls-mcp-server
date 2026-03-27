@@ -1,0 +1,37 @@
+# CLS MCP Server - Docker Compose 快速启动
+# 使用: docker compose up -d
+# 查看日志: docker compose logs -f
+
+services:
+  cls-mcp-server:
+    build:
+      context: .
+      dockerfile: deploy/docker/Dockerfile
+    ports:
+      - "${CLS_PORT:-8000}:8000"
+    environment:
+      # [必填] 腾讯云密钥
+      - CLS_SECRET_ID=${CLS_SECRET_ID}
+      - CLS_SECRET_KEY=${CLS_SECRET_KEY}
+      # [必填] 地域
+      - CLS_REGION=${CLS_REGION:-ap-guangzhou}
+      # 传输方式
+      - CLS_TRANSPORT=${CLS_TRANSPORT:-streamable-http}
+      - CLS_HOST=0.0.0.0
+      - CLS_PORT=8000
+      # 无状态模式
+      - CLS_STATELESS_HTTP=${CLS_STATELESS_HTTP:-true}
+      # 权限控制
+      - CLS_ENABLE_WRITE=${CLS_ENABLE_WRITE:-false}
+      - CLS_ENABLE_DANGEROUS=${CLS_ENABLE_DANGEROUS:-false}
+      # HTTP 认证（建议生产环境开启）
+      - MCP_AUTH_TOKEN=${MCP_AUTH_TOKEN:-}
+      # 日志级别
+      - CLS_LOG_LEVEL=${CLS_LOG_LEVEL:-INFO}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s

@@ -1,0 +1,50 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.pyc
+*.pyo
+*.egg-info
+.eggs
+dist
+build
+
+# Virtual environments
+.venv
+venv
+env
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Testing
+tests
+.pytest_cache
+.coverage
+htmlcov
+
+# Documentation
+docs
+
+# CI/CD
+.github
+
+# Environment files (secrets should be injected at runtime)
+.env
+.env.local
+
+# Deploy configs (not needed inside container)
+deploy
+
+# Other
+*.md
+LICENSE
+.codebuddy
+cls-search-log-test
+*.tar.gz
+需求大纲

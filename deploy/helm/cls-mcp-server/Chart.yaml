@@ -1,0 +1,13 @@
+apiVersion: v2
+name: cls-mcp-server
+description: 腾讯云 CLS 日志服务 MCP Server Helm Chart
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - mcp
+  - cls
+  - tencent-cloud
+  - observability
+maintainers:
+  - name: tinkerli

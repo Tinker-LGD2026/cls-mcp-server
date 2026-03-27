@@ -1,0 +1,53 @@
+[project]
+name = "cls-mcp-server"
+version = "0.1.0"
+description = "腾讯云 CLS 日志服务 MCP Server - 从可观测性视角为 AI 助手提供全方位日志服务能力"
+license = { text = "Apache-2.0" }
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    { name = "tinkerli" },
+]
+keywords = ["mcp", "cls", "tencent-cloud", "log-service", "observability"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: Apache Software License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: System :: Logging",
+]
+dependencies = [
+    "mcp[cli]>=1.0.0",
+    "tencentcloud-sdk-python-cls>=1.0.0",
+    "tencentcloud-sdk-python-region>=3.0.0",
+    "python-dotenv>=1.0.0",
+    "httpx>=0.27.0",
+]
+
+[project.scripts]
+cls-mcp-server = "cls_mcp_server.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/Tinker-LGD2026/cls-mcp-server"
+Repository = "https://github.com/Tinker-LGD2026/cls-mcp-server"
+Issues = "https://github.com/Tinker-LGD2026/cls-mcp-server/issues"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cls_mcp_server"]
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "N", "UP", "B", "A", "SIM"]
+
+[tool.ruff.format]
+quote-style = "double"

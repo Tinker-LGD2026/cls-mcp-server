@@ -1,0 +1,21 @@
+# CLS MCP Server - Kubernetes Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: cls-mcp-server
+  labels:
+    app: cls-mcp-server
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8000
+      targetPort: http
+      protocol: TCP
+  selector:
+    app: cls-mcp-server
+  # SSE 长连接模式下建议开启 session affinity
+  # sessionAffinity: ClientIP
+  # sessionAffinityConfig:
+  #   clientIP:
+  #     timeoutSeconds: 3600
