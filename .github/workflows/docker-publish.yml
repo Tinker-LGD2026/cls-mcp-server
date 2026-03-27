@@ -32,11 +32,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
       - name: Docker Logout
         run: docker logout || true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       # 登录 GHCR
       - name: Login to GitHub Container Registry
