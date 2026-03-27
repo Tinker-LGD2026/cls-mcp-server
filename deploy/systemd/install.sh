@@ -32,6 +32,11 @@ YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
+# 网络状态标记（由 check_network 设置）
+NETWORK_ASTRAL_OK=false
+NETWORK_PYPI_OK=false
+NETWORK_CHINA_MIRROR_OK=false
+
 # ======================== 工具函数 ========================
 
 log_info()  { echo -e "${GREEN}[INFO]${NC}  $*"; }
@@ -128,12 +133,38 @@ check_dependencies() {
 check_network() {
     log_step "检测网络连通性..."
 
+    # 标记网络状况，供后续步骤使用
+    NETWORK_ASTRAL_OK=false
+    NETWORK_PYPI_OK=false
+    NETWORK_CHINA_MIRROR_OK=false
+
     if curl -sf --connect-timeout 5 https://astral.sh >/dev/null 2>&1; then
-        log_info "网络连通 (astral.sh)"
-    elif curl -sf --connect-timeout 5 https://pypi.org >/dev/null 2>&1; then
-        log_info "网络连通 (pypi.org)"
+        NETWORK_ASTRAL_OK=true
+        log_info "astral.sh 可达 ✓"
     else
-        die "无法访问外网，uv 和 Python 安装需要网络连接"
+        log_warn "astral.sh 不可达（国内服务器正常现象）"
+    fi
+
+    if curl -sf --connect-timeout 5 https://pypi.org >/dev/null 2>&1; then
+        NETWORK_PYPI_OK=true
+        log_info "pypi.org 可达 ✓"
+    else
+        log_warn "pypi.org 不可达，将使用国内镜像源"
+    fi
+
+    if ! $NETWORK_PYPI_OK; then
+        if curl -sf --connect-timeout 5 https://pypi.tuna.tsinghua.edu.cn >/dev/null 2>&1; then
+            NETWORK_CHINA_MIRROR_OK=true
+            log_info "清华 PyPI 镜像可达 ✓"
+        elif curl -sf --connect-timeout 5 https://mirrors.aliyun.com >/dev/null 2>&1; then
+            NETWORK_CHINA_MIRROR_OK=true
+            log_info "阿里云镜像可达 ✓"
+        fi
+    fi
+
+    # 至少要有一个 PyPI 源可达，否则无法安装依赖
+    if ! $NETWORK_PYPI_OK && ! $NETWORK_CHINA_MIRROR_OK; then
+        die "无法访问任何 PyPI 源（pypi.org / 清华镜像 / 阿里镜像），Python 依赖无法安装。\n  请检查服务器网络或 DNS 配置。"
     fi
 }
 
@@ -150,40 +181,155 @@ create_user() {
     fi
 }
 
-install_uv() {
-    log_step "安装 uv 包管理器..."
-
-    # 检查是否已安装
+# 在 sudo 环境下搜索已安装的 uv，解决 secure_path 找不到 uv 的问题
+find_uv() {
+    # 如果已经在 PATH 中，直接返回
     if command -v uv &>/dev/null; then
-        local uv_ver
-        uv_ver=$(uv --version 2>/dev/null || echo "unknown")
-        log_info "uv 已安装: $uv_ver，跳过"
         return 0
     fi
 
-    # 安装 uv 到 /usr/local/bin（全局可用）
-    log_info "正在下载并安装 uv..."
-    curl -LsSf https://astral.sh/uv/install.sh | INSTALLER_NO_MODIFY_PATH=1 sh
+    # sudo 的 secure_path 可能不包含用户目录，主动搜索常见安装位置
+    local search_paths=(
+        "/usr/local/bin"
+        "/usr/bin"
+        "$HOME/.local/bin"
+        "/root/.local/bin"
+        "$HOME/.cargo/bin"
+        "/root/.cargo/bin"
+    )
 
-    # uv 默认安装到 ~/.local/bin 或 ~/.cargo/bin
-    # 创建符号链接到 /usr/local/bin 方便全局使用
-    local uv_path=""
-    for p in "$HOME/.local/bin/uv" "$HOME/.cargo/bin/uv"; do
-        if [[ -x "$p" ]]; then
-            uv_path="$p"
-            break
+    for p in "${search_paths[@]}"; do
+        if [[ -x "$p/uv" ]]; then
+            log_info "在 $p 找到 uv，加入 PATH"
+            export PATH="$p:$PATH"
+            return 0
         fi
     done
 
-    if [[ -z "$uv_path" ]]; then
-        die "uv 安装失败：找不到 uv 可执行文件"
+    return 1
+}
+
+# 将 uv 复制到 /usr/local/bin，确保 sudo 和服务用户都能找到
+ensure_uv_in_global_path() {
+    local uv_real_path
+    uv_real_path="$(command -v uv 2>/dev/null)"
+
+    if [[ -z "$uv_real_path" ]]; then
+        return 1
     fi
 
-    if [[ ! -x /usr/local/bin/uv ]]; then
-        ln -sf "$uv_path" /usr/local/bin/uv
+    # 已经在全局路径，不需要复制
+    if [[ "$uv_real_path" == "/usr/local/bin/uv" ]] || [[ "$uv_real_path" == "/usr/bin/uv" ]]; then
+        return 0
     fi
 
-    log_info "uv 安装成功: $(uv --version)"
+    # 复制到 /usr/local/bin（比软链接更可靠，避免 sudo secure_path 问题）
+    log_info "将 uv 复制到 /usr/local/bin/ 确保全局可用..."
+    cp -f "$uv_real_path" /usr/local/bin/uv
+    chmod +x /usr/local/bin/uv
+
+    # 同时处理 uvx
+    local uvx_path
+    uvx_path="$(dirname "$uv_real_path")/uvx"
+    if [[ -x "$uvx_path" ]] && [[ ! -x /usr/local/bin/uvx ]]; then
+        cp -f "$uvx_path" /usr/local/bin/uvx
+        chmod +x /usr/local/bin/uvx
+    fi
+
+    export PATH="/usr/local/bin:$PATH"
+    return 0
+}
+
+# 下载安装 uv（多源回退）
+download_uv() {
+    local arch
+    arch="$(uname -m)"
+    local os_type="unknown-linux-gnu"
+
+    # 方式1: 官方安装脚本（海外服务器优先）
+    if $NETWORK_ASTRAL_OK; then
+        log_info "尝试从官方源安装 uv ..."
+        if curl -LsSf --connect-timeout 15 --max-time 60 https://astral.sh/uv/install.sh | INSTALLER_NO_MODIFY_PATH=1 sh 2>/dev/null; then
+            if find_uv; then
+                return 0
+            fi
+        fi
+        log_warn "官方源安装失败"
+    fi
+
+    # 方式2: GitHub 镜像代理下载二进制
+    local mirror_urls=(
+        "https://ghfast.top/https://github.com/astral-sh/uv/releases/latest/download/uv-${arch}-${os_type}.tar.gz"
+        "https://gh-proxy.com/https://github.com/astral-sh/uv/releases/latest/download/uv-${arch}-${os_type}.tar.gz"
+        "https://github.com/astral-sh/uv/releases/latest/download/uv-${arch}-${os_type}.tar.gz"
+    )
+
+    for url in "${mirror_urls[@]}"; do
+        log_info "尝试从 $(echo "$url" | cut -d'/' -f3) 下载 uv 二进制..."
+        if curl -fSL --connect-timeout 15 --max-time 120 "$url" -o /tmp/uv.tar.gz 2>/dev/null; then
+            # 解压并安装到 /usr/local/bin
+            if tar -xzf /tmp/uv.tar.gz -C /tmp 2>/dev/null; then
+                local extracted_dir="/tmp/uv-${arch}-${os_type}"
+                if [[ -x "$extracted_dir/uv" ]]; then
+                    cp -f "$extracted_dir/uv" /usr/local/bin/uv
+                    chmod +x /usr/local/bin/uv
+                    [[ -x "$extracted_dir/uvx" ]] && cp -f "$extracted_dir/uvx" /usr/local/bin/uvx && chmod +x /usr/local/bin/uvx
+                    rm -rf /tmp/uv.tar.gz "$extracted_dir"
+                    export PATH="/usr/local/bin:$PATH"
+                    log_info "uv 二进制安装成功"
+                    return 0
+                fi
+            fi
+            rm -f /tmp/uv.tar.gz
+        fi
+        log_warn "从该镜像下载失败，尝试下一个..."
+    done
+
+    return 1
+}
+
+install_uv() {
+    log_step "安装 uv 包管理器..."
+
+    # 第一步：搜索已存在的 uv
+    if find_uv; then
+        local uv_ver
+        uv_ver=$(uv --version 2>/dev/null || echo "unknown")
+        log_info "uv 已安装: $uv_ver"
+
+        # 确保 uv 在全局路径（解决后续 sudo 调用问题）
+        ensure_uv_in_global_path
+        log_info "uv 路径: $(command -v uv)"
+        return 0
+    fi
+
+    # 第二步：未安装，需要下载
+    log_info "未检测到 uv，开始下载安装..."
+
+    if download_uv; then
+        ensure_uv_in_global_path
+        log_info "uv 安装成功: $(uv --version)"
+        return 0
+    fi
+
+    # 全部失败，给出手动安装指引
+    echo ""
+    log_error "uv 自动安装失败！请手动安装后重新运行此脚本。"
+    echo ""
+    echo "  手动安装方法（任选其一）："
+    echo ""
+    echo "  方法1 - 官方脚本（需要海外网络）："
+    echo "    curl -LsSf https://astral.sh/uv/install.sh | sh"
+    echo ""
+    echo "  方法2 - 手动下载二进制（推荐国内服务器）："
+    echo "    wget https://ghfast.top/https://github.com/astral-sh/uv/releases/latest/download/uv-$(uname -m)-unknown-linux-gnu.tar.gz -O /tmp/uv.tar.gz"
+    echo "    tar -xzf /tmp/uv.tar.gz -C /tmp"
+    echo "    cp /tmp/uv-$(uname -m)-unknown-linux-gnu/uv /usr/local/bin/"
+    echo "    chmod +x /usr/local/bin/uv"
+    echo ""
+    echo "  安装后重新运行: sudo bash $0"
+    echo ""
+    exit 1
 }
 
 setup_project() {
@@ -237,6 +383,18 @@ setup_project() {
 
     # 使用 uv 安装 Python 和依赖
     cd "$INSTALL_DIR"
+
+    # 如果官方 PyPI 不可达，配置国内镜像源
+    if ! $NETWORK_PYPI_OK; then
+        log_info "配置国内 PyPI 镜像源..."
+        if curl -sf --connect-timeout 3 https://pypi.tuna.tsinghua.edu.cn >/dev/null 2>&1; then
+            export UV_INDEX_URL="https://pypi.tuna.tsinghua.edu.cn/simple"
+            log_info "使用清华镜像: $UV_INDEX_URL"
+        elif curl -sf --connect-timeout 3 https://mirrors.aliyun.com >/dev/null 2>&1; then
+            export UV_INDEX_URL="https://mirrors.aliyun.com/pypi/simple"
+            log_info "使用阿里镜像: $UV_INDEX_URL"
+        fi
+    fi
 
     log_info "使用 uv 安装 Python ${PYTHON_VERSION}..."
     uv python install "$PYTHON_VERSION"
