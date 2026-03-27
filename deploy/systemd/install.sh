@@ -396,8 +396,24 @@ setup_project() {
         fi
     fi
 
+    # 将 Python 安装到项目目录内，避免装到 /root/.local/share/ 导致 cls-mcp 用户无权限访问
+    export UV_PYTHON_INSTALL_DIR="${INSTALL_DIR}/.python"
+    mkdir -p "${UV_PYTHON_INSTALL_DIR}"
+    log_info "Python 安装目录: ${UV_PYTHON_INSTALL_DIR}"
+
     log_info "使用 uv 安装 Python ${PYTHON_VERSION}..."
     uv python install "$PYTHON_VERSION"
+
+    # 升级兼容：检测已有 .venv 的 Python 是否指向项目外路径（如 /root/.local/share/），如果是则删除重建
+    if [[ -L "${INSTALL_DIR}/.venv/bin/python" ]]; then
+        local python_target
+        python_target="$(readlink -f "${INSTALL_DIR}/.venv/bin/python" 2>/dev/null || true)"
+        if [[ -n "$python_target" ]] && [[ ! "$python_target" == "${INSTALL_DIR}"* ]]; then
+            log_warn "检测到旧 venv 的 Python 指向项目外路径: $python_target"
+            log_warn "删除旧 venv 并重建..."
+            rm -rf "${INSTALL_DIR}/.venv"
+        fi
+    fi
 
     log_info "创建虚拟环境并安装依赖..."
     if [[ -f "uv.lock" ]]; then
@@ -413,7 +429,19 @@ setup_project() {
         die "项目安装失败：cls-mcp-server 命令不可用"
     fi
 
-    # 设置目录所有权
+    # 验证 Python 路径权限（确保 .venv 中的 Python 指向项目内目录）
+    if [[ -L "${INSTALL_DIR}/.venv/bin/python" ]]; then
+        local final_python_target
+        final_python_target="$(readlink -f "${INSTALL_DIR}/.venv/bin/python" 2>/dev/null || true)"
+        if [[ -n "$final_python_target" ]] && [[ "$final_python_target" == "${INSTALL_DIR}"* ]]; then
+            log_info "Python 路径验证通过: $final_python_target"
+        else
+            log_warn "Python 路径可能存在权限风险: $final_python_target"
+            log_warn "服务用户 ${SERVICE_USER} 需要对该路径有读取和执行权限"
+        fi
+    fi
+
+    # 设置目录所有权（包含 .python 和 .venv）
     chown -R "${SERVICE_USER}:${SERVICE_GROUP}" "$INSTALL_DIR"
 }
 
