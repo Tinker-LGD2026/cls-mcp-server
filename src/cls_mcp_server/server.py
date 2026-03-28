@@ -1,11 +1,15 @@
 """MCP Server 实例创建与启动
 
 负责创建 FastMCP 实例、注册工具、启动 SSE / Streamable HTTP / stdio 传输。
+包含稳定性初始化和优雅关闭。
 """
 
 from __future__ import annotations
 
 import logging
+import signal
+import sys
+from typing import Any
 
 import anyio
 import uvicorn
@@ -16,6 +20,7 @@ from starlette.responses import JSONResponse
 from cls_mcp_server.config import ServerConfig
 from cls_mcp_server.middleware import BearerTokenAuthMiddleware
 from cls_mcp_server.tools.registry import register_all_tools
+from cls_mcp_server.utils.stability import init_stability
 
 logger = logging.getLogger(__name__)
 
@@ -104,6 +109,14 @@ def create_server(config: ServerConfig) -> FastMCP:
     # 将 config 注入到所有工具模块
     _inject_config(config)
 
+    # 初始化稳定性组件（重试 + 熔断）
+    init_stability(
+        max_attempts=config.retry_max_attempts,
+        base_delay=config.retry_base_delay,
+        failure_threshold=config.cb_failure_threshold,
+        recovery_timeout=config.cb_recovery_timeout,
+    )
+
     # 注册工具
     registered = register_all_tools(mcp, config)
     logger.info("Server initialized with %d tools", len(registered))
@@ -121,6 +134,7 @@ def run_server(config: ServerConfig) -> None:
 
     if config.transport == "stdio":
         logger.info("Starting stdio transport")
+        _setup_signal_handlers()
         mcp.run(transport="stdio")
     elif config.transport in ("sse", "streamable-http"):
         # HTTP 模式：手动获取 Starlette app，以便挂载认证中间件
@@ -147,12 +161,31 @@ def run_server(config: ServerConfig) -> None:
                 "HTTP endpoint is UNPROTECTED!"
             )
 
-        # 使用 uvicorn 启动
+        # 使用 uvicorn 启动，配置优雅关闭超时
         uv_config = uvicorn.Config(
             starlette_app,
             host=config.host,
             port=config.port,
             log_level=config.log_level.lower(),
+            timeout_graceful_shutdown=30,
         )
         server = uvicorn.Server(uv_config)
         anyio.run(server.serve)
+
+
+def _setup_signal_handlers() -> None:
+    """设置信号处理器实现优雅关闭
+
+    仅在非 Windows 系统下注册 SIGTERM 处理器。
+    SIGINT 由 Python 默认的 KeyboardInterrupt 处理即可。
+    """
+    if sys.platform == "win32":
+        return
+
+    def _handle_sigterm(signum: int, frame: Any) -> None:
+        logger.info("Received SIGTERM, initiating graceful shutdown...")
+        from cls_mcp_server.auth import clear_client_cache
+        clear_client_cache()
+        raise SystemExit(0)
+
+    signal.signal(signal.SIGTERM, _handle_sigterm)

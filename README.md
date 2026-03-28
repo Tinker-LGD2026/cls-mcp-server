@@ -334,6 +334,40 @@ curl http://127.0.0.1:8000/health
 | `CLS_ENABLE_WRITE` | 否 | `false` | 启用写操作工具（创建/修改） |
 | `CLS_ENABLE_DANGEROUS` | 否 | `false` | 启用危险操作工具（删除，需同时开启写操作） |
 | `CLS_LOG_LEVEL` | 否 | `INFO` | 日志级别：`DEBUG` / `INFO` / `WARNING` / `ERROR` |
+| `CLS_REQUEST_TIMEOUT` | 否 | `60` | SDK 请求超时时间（秒） |
+| `CLS_RETRY_MAX_ATTEMPTS` | 否 | `3` | 失败重试最大尝试次数（含首次调用） |
+| `CLS_RETRY_BASE_DELAY` | 否 | `1.0` | 重试基础退避延迟（秒），实际延迟会指数递增 |
+| `CLS_CB_FAILURE_THRESHOLD` | 否 | `5` | 熔断器触发阈值：连续失败多少次后熔断 |
+| `CLS_CB_RECOVERY_TIMEOUT` | 否 | `30` | 熔断恢复超时（秒）：熔断后多久尝试恢复 |
+| `CLS_ENABLED_TOOLS` | 否 | — | 工具白名单（逗号分隔），未设置则注册全部工具，详见下方说明 |
+
+### 工具白名单（CLS_ENABLED_TOOLS）
+
+默认情况下，Server 会注册所有符合权限等级的工具。如果你只需要部分功能，可以通过 `CLS_ENABLED_TOOLS` 精确控制注册哪些工具，**未列出的工具不会注册，AI 助手也无法调用**。
+
+**配置格式**：工具名用英文逗号分隔，名称必须与上方"工具清单"中的工具名完全一致。
+
+```bash
+# 只注册日志查询相关工具
+CLS_ENABLED_TOOLS="cls_search_log,cls_get_log_context,cls_get_log_histogram,cls_get_log_count,cls_describe_search_syntax,cls_convert_time"
+
+# 只注册告警管理相关工具
+CLS_ENABLED_TOOLS="cls_describe_alarms,cls_describe_alarm_detail,cls_describe_alarm_notices,cls_describe_alarm_records,cls_get_alarm_detail"
+
+# CLI 方式
+cls-mcp-server --enabled-tools "cls_search_log,cls_get_log_context,cls_describe_topics,cls_describe_index"
+```
+
+**常见场景示例**：
+
+| 场景 | 推荐配置 |
+|------|----------|
+| 只做日志查询分析 | `cls_search_log,cls_get_log_context,cls_get_log_histogram,cls_get_log_count,cls_describe_search_syntax,cls_convert_time` |
+| 只做告警监控 | `cls_describe_alarms,cls_describe_alarm_detail,cls_describe_alarm_notices,cls_describe_alarm_records,cls_get_alarm_detail` |
+| 日志查询 + 资源浏览 | `cls_search_log,cls_get_log_context,cls_get_log_count,cls_describe_topics,cls_describe_logsets,cls_describe_index,cls_convert_time` |
+| 不设置（默认） | 注册全部工具 |
+
+> **提示**：白名单与权限控制（`CLS_ENABLE_WRITE` / `CLS_ENABLE_DANGEROUS`）是 AND 关系，两者同时满足才会注册。填写了不存在的工具名会在启动日志中输出警告，不会影响其他工具注册。
 
 ---
 

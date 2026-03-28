@@ -68,6 +68,23 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="HTTP Bearer Token 认证令牌（SSE/Streamable HTTP 模式），覆盖环境变量 MCP_AUTH_TOKEN",
     )
+    parser.add_argument(
+        "--request-timeout",
+        type=int,
+        default=None,
+        help="SDK 请求超时时间（秒），覆盖环境变量 CLS_REQUEST_TIMEOUT，默认 60",
+    )
+    parser.add_argument(
+        "--retry-max-attempts",
+        type=int,
+        default=None,
+        help="最大重试次数（含首次），覆盖环境变量 CLS_RETRY_MAX_ATTEMPTS，默认 3",
+    )
+    parser.add_argument(
+        "--enabled-tools",
+        default=None,
+        help="工具白名单（逗号分隔），覆盖环境变量 CLS_ENABLED_TOOLS，未设置则注册全部",
+    )
     return parser.parse_args()
 
 
@@ -94,6 +111,14 @@ def main() -> None:
         overrides["log_level"] = args.log_level
     if args.auth_token is not None:
         overrides["auth_token"] = args.auth_token
+    if args.request_timeout is not None:
+        overrides["request_timeout"] = args.request_timeout
+    if args.retry_max_attempts is not None:
+        overrides["retry_max_attempts"] = args.retry_max_attempts
+    if args.enabled_tools is not None:
+        overrides["enabled_tools"] = frozenset(
+            t.strip() for t in args.enabled_tools.split(",") if t.strip()
+        )
 
     if overrides:
         # frozen dataclass，需要重建
@@ -109,6 +134,12 @@ def main() -> None:
             "enable_dangerous": config.enable_dangerous,
             "auth_token": config.auth_token,
             "log_level": config.log_level,
+            "request_timeout": config.request_timeout,
+            "retry_max_attempts": config.retry_max_attempts,
+            "retry_base_delay": config.retry_base_delay,
+            "cb_failure_threshold": config.cb_failure_threshold,
+            "cb_recovery_timeout": config.cb_recovery_timeout,
+            "enabled_tools": config.enabled_tools,
         }
         config_dict.update(overrides)
         config = ServerConfig(**config_dict)

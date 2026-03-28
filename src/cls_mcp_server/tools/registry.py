@@ -85,6 +85,10 @@ def should_register(level: ToolLevel, config: ServerConfig) -> bool:
 def register_all_tools(mcp: FastMCP, config: ServerConfig) -> list[str]:
     """将符合权限要求的工具注册到 MCP Server
 
+    过滤逻辑（AND 关系）：
+    1. 权限检查：READ 默认通过，WRITE/DANGER 需要配置开启
+    2. 白名单检查：enabled_tools 非空时，工具名必须在白名单中
+
     Args:
         mcp: FastMCP server 实例
         config: 服务器配置
@@ -95,6 +99,16 @@ def register_all_tools(mcp: FastMCP, config: ServerConfig) -> list[str]:
     # 先导入所有工具模块，触发 @cls_tool 装饰器执行
     _import_tool_modules()
 
+    # 校验白名单中是否有无效的工具名
+    if config.enabled_tools:
+        all_tool_names = {t["name"] for t in _tool_definitions}
+        invalid_names = config.enabled_tools - all_tool_names
+        if invalid_names:
+            logger.warning(
+                "⚠️  Unknown tool names in CLS_ENABLED_TOOLS (ignored): %s",
+                ", ".join(sorted(invalid_names)),
+            )
+
     registered: list[str] = []
     skipped: list[str] = []
 
@@ -104,16 +118,23 @@ def register_all_tools(mcp: FastMCP, config: ServerConfig) -> list[str]:
         desc = tool_def["description"]
         func = tool_def["func"]
 
-        if should_register(level, config):
-            # 注册到 FastMCP
-            mcp.tool(name=name, description=desc)(func)
-            registered.append(f"{name} [{level.value}]")
-        else:
-            skipped.append(f"{name} [{level.value}]")
+        # 条件 1：权限检查
+        if not should_register(level, config):
+            skipped.append(f"{name} [{level.value}] (permission)")
+            continue
+
+        # 条件 2：白名单检查（空白名单 = 全部通过）
+        if config.enabled_tools and name not in config.enabled_tools:
+            skipped.append(f"{name} [{level.value}] (whitelist)")
+            continue
+
+        # 注册到 FastMCP
+        mcp.tool(name=name, description=desc)(func)
+        registered.append(f"{name} [{level.value}]")
 
     logger.info("✅ Registered %d tools: %s", len(registered), ", ".join(registered))
     if skipped:
-        logger.info("⏭️  Skipped %d tools (permission): %s", len(skipped), ", ".join(skipped))
+        logger.info("⏭️  Skipped %d tools: %s", len(skipped), ", ".join(skipped))
 
     return registered
 

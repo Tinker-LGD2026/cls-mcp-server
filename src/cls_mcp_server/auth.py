@@ -53,6 +53,7 @@ def get_cls_client(config: ServerConfig, region: str | None = None) -> cls_clien
     http_profile = HttpProfile()
     http_profile.endpoint = "cls.tencentcloudapi.com"
     http_profile.reqMethod = "POST"
+    http_profile.reqTimeout = config.request_timeout
 
     client_profile = ClientProfile()
     client_profile.httpProfile = http_profile
@@ -62,7 +63,7 @@ def get_cls_client(config: ServerConfig, region: str | None = None) -> cls_clien
     with _cache_lock:
         _client_cache[cache_key] = client
 
-    logger.info("Created CLS client for region: %s", target_region)
+    logger.info("Created CLS client for region: %s (timeout: %ds)", target_region, config.request_timeout)
     return client
 
 

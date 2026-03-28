@@ -47,6 +47,20 @@ class ServerConfig:
     # 日志
     log_level: str = "INFO"
 
+    # SDK 请求超时（秒），部分大模型相关接口较慢，建议适当调大
+    request_timeout: int = 60
+
+    # 重试配置
+    retry_max_attempts: int = 3       # 最大尝试次数（含首次调用）
+    retry_base_delay: float = 1.0     # 基础退避延迟（秒）
+
+    # 熔断器配置
+    cb_failure_threshold: int = 5     # 连续失败多少次后触发熔断
+    cb_recovery_timeout: int = 30     # 熔断后多少秒进入半开状态尝试恢复
+
+    # 工具白名单（为空则注册全部工具）
+    enabled_tools: frozenset[str] = field(default_factory=frozenset)
+
     # === 向后兼容属性 ===
     @property
     def sse_host(self) -> str:
@@ -67,6 +81,14 @@ class ServerConfig:
         host = os.getenv("CLS_HOST") or os.getenv("CLS_SSE_HOST", "0.0.0.0")
         port_str = os.getenv("CLS_PORT") or os.getenv("CLS_SSE_PORT", "8000")
 
+        # 解析工具白名单
+        enabled_tools_raw = os.getenv("CLS_ENABLED_TOOLS", "").strip()
+        enabled_tools = (
+            frozenset(t.strip() for t in enabled_tools_raw.split(",") if t.strip())
+            if enabled_tools_raw
+            else frozenset()
+        )
+
         return cls(
             secret_id=os.getenv("CLS_SECRET_ID", ""),
             secret_key=os.getenv("CLS_SECRET_KEY", ""),
@@ -79,6 +101,12 @@ class ServerConfig:
             enable_dangerous=os.getenv("CLS_ENABLE_DANGEROUS", "false").lower() == "true",
             auth_token=os.getenv("MCP_AUTH_TOKEN") or None,
             log_level=os.getenv("CLS_LOG_LEVEL", "INFO"),
+            request_timeout=cls._safe_int(os.getenv("CLS_REQUEST_TIMEOUT", "60"), 60),
+            retry_max_attempts=cls._safe_int(os.getenv("CLS_RETRY_MAX_ATTEMPTS", "3"), 3),
+            retry_base_delay=cls._safe_float(os.getenv("CLS_RETRY_BASE_DELAY", "1.0"), 1.0),
+            cb_failure_threshold=cls._safe_int(os.getenv("CLS_CB_FAILURE_THRESHOLD", "5"), 5),
+            cb_recovery_timeout=cls._safe_int(os.getenv("CLS_CB_RECOVERY_TIMEOUT", "30"), 30),
+            enabled_tools=enabled_tools,
         )
 
     @staticmethod
@@ -88,6 +116,15 @@ class ServerConfig:
             return int(value)
         except (ValueError, TypeError):
             logger.warning("Invalid integer value '%s', using default %d", value, default)
+            return default
+
+    @staticmethod
+    def _safe_float(value: str, default: float) -> float:
+        """安全的浮点数转换，失败时返回默认值"""
+        try:
+            return float(value)
+        except (ValueError, TypeError):
+            logger.warning("Invalid float value '%s', using default %s", value, default)
             return default
 
     def validate(self) -> list[str]:
@@ -114,6 +151,13 @@ class ServerConfig:
         logger.info("  SecretId:   %s", masked_id)
         logger.info("  Write mode: %s", "ENABLED" if self.enable_write else "DISABLED (read-only)")
         logger.info("  Danger mode:%s", "ENABLED" if self.enable_dangerous else "DISABLED")
+        logger.info("  Timeout:    %ds", self.request_timeout)
+        logger.info("  Retry:      max %d attempts, base delay %.1fs", self.retry_max_attempts, self.retry_base_delay)
+        logger.info("  Breaker:    threshold %d failures, recovery %ds", self.cb_failure_threshold, self.cb_recovery_timeout)
+        if self.enabled_tools:
+            logger.info("  Whitelist:  %s", ", ".join(sorted(self.enabled_tools)))
+        else:
+            logger.info("  Whitelist:  ALL (no filter)")
         if self.transport in ("sse", "streamable-http"):
             logger.info("  Listen:     %s:%d", self.host, self.port)
             if self.transport == "streamable-http":

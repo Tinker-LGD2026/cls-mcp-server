@@ -173,6 +173,12 @@ uv run cls-mcp-server --transport stdio --log-level DEBUG --enable-write
 | `CLS_ENABLE_DANGEROUS` | 否 | `false` | 启用危险操作工具（需同时开启写操作） |
 | `MCP_AUTH_TOKEN` | 否 | — | HTTP Bearer Token 认证令牌（SSE/Streamable HTTP 模式） |
 | `CLS_LOG_LEVEL` | 否 | `INFO` | 日志级别：`DEBUG` / `INFO` / `WARNING` / `ERROR` |
+| `CLS_REQUEST_TIMEOUT` | 否 | `60` | SDK 请求超时时间（秒） |
+| `CLS_RETRY_MAX_ATTEMPTS` | 否 | `3` | 失败重试最大尝试次数（含首次调用） |
+| `CLS_RETRY_BASE_DELAY` | 否 | `1.0` | 重试基础退避延迟（秒），实际延迟会指数递增加随机抖动 |
+| `CLS_CB_FAILURE_THRESHOLD` | 否 | `5` | 熔断器触发阈值：连续失败多少次后触发熔断 |
+| `CLS_CB_RECOVERY_TIMEOUT` | 否 | `30` | 熔断恢复超时（秒）：熔断后多久进入半开状态尝试恢复 |
+| `CLS_ENABLED_TOOLS` | 否 | — | 工具白名单（逗号分隔），未设置则注册全部工具 |
 
 > 向后兼容：`CLS_SSE_HOST` / `CLS_SSE_PORT` 仍可使用，作为 `CLS_HOST` / `CLS_PORT` 的回退。
 
@@ -187,6 +193,9 @@ uv run cls-mcp-server --transport stdio --log-level DEBUG --enable-write
 | `--enable-dangerous` | 启用危险操作工具 | `--enable-dangerous` |
 | `--auth-token` | HTTP Bearer Token 认证令牌，覆盖 `MCP_AUTH_TOKEN` | `--auth-token my-secret` |
 | `--log-level` | 日志级别 | `--log-level DEBUG` |
+| `--request-timeout` | SDK 请求超时（秒），覆盖 `CLS_REQUEST_TIMEOUT` | `--request-timeout 120` |
+| `--retry-max-attempts` | 最大重试次数（含首次），覆盖 `CLS_RETRY_MAX_ATTEMPTS` | `--retry-max-attempts 5` |
+| `--enabled-tools` | 工具白名单（逗号分隔），覆盖 `CLS_ENABLED_TOOLS` | `--enabled-tools "cls_search_log,cls_get_log_context"` |
 
 > **优先级**：CLI 参数 > 环境变量 > 默认值
 
@@ -871,6 +880,192 @@ python3 -c "import secrets; print(secrets.token_urlsafe(32))"
 | DANGER | 5 | `CLS_ENABLE_WRITE=true` + `CLS_ENABLE_DANGEROUS=true` | 删除操作（不可逆），工具描述自动追加 🚨 警告 |
 
 生产环境建议仅开启 READ 权限。如需写操作，建议单独部署一个开启写权限的实例，限制访问范围。
+
+### 工具白名单（CLS_ENABLED_TOOLS）
+
+默认情况下，Server 注册所有符合权限等级的工具。通过 `CLS_ENABLED_TOOLS` 可以精确控制注册哪些工具——**只有列在白名单中的工具才会被注册，AI 助手只能调用已注册的工具**。
+
+#### 为什么要用白名单？
+
+- **减少干扰**：工具越多，AI 越可能调用不相关的工具，缩小范围能提高准确率
+- **安全隔离**：只暴露业务需要的能力，降低误操作风险
+- **场景定制**：为不同团队/用途部署不同的工具集合
+
+#### 配置语法
+
+- **格式**：工具名用英文逗号 `,` 分隔，名称区分大小写
+- **环境变量**：`CLS_ENABLED_TOOLS="cls_search_log,cls_get_log_context"`
+- **CLI 参数**：`--enabled-tools "cls_search_log,cls_get_log_context"`
+- **不设置**（默认）：注册全部符合权限等级的工具
+
+#### 可选工具清单
+
+以下是所有可配置的工具名称，按功能分组：
+
+**日志查询（5 个）**
+
+| 工具名称 | 功能说明 |
+|---------|---------|
+| `cls_search_log` | 检索分析 CLS 日志，支持 CQL 语法检索和 SQL 管道分析 |
+| `cls_get_log_context` | 获取日志上下文，查看目标日志前后的记录 |
+| `cls_get_log_histogram` | 获取日志数量直方图 |
+| `cls_get_log_count` | 快速获取日志数量 |
+| `cls_describe_search_syntax` | 获取检索语法参考和查询模板 |
+
+**指标查询（3 个）**
+
+| 工具名称 | 功能说明 |
+|---------|---------|
+| `cls_query_metric` | 查询指标数据（单时间点） |
+| `cls_query_range_metric` | 查询指标数据（时间范围） |
+| `cls_list_metrics` | 列出指标主题下所有可用指标 |
+
+**告警管理（5 个只读 + 2 个写入 + 1 个危险）**
+
+| 工具名称 | 功能说明 | 权限 |
+|---------|---------|------|
+| `cls_describe_alarms` | 查询告警策略列表 | READ |
+| `cls_describe_alarm_detail` | 获取告警策略详情 | READ |
+| `cls_describe_alarm_notices` | 查询告警通知渠道 | READ |
+| `cls_describe_alarm_records` | 查询告警历史记录 | READ |
+| `cls_get_alarm_detail` | 通过 URL 获取告警详情 | READ |
+| `cls_create_alarm` | 创建告警策略 | WRITE |
+| `cls_modify_alarm` | 修改告警策略 | WRITE |
+| `cls_delete_alarm` | 删除告警策略 | DANGER |
+
+**资源管理（8 个只读 + 4 个写入 + 2 个危险）**
+
+| 工具名称 | 功能说明 | 权限 |
+|---------|---------|------|
+| `cls_describe_logsets` | 查询日志集列表 | READ |
+| `cls_describe_topics` | 查询日志主题列表 | READ |
+| `cls_describe_topic_detail` | 获取主题详情 | READ |
+| `cls_describe_index` | 查询索引配置 | READ |
+| `cls_describe_machine_groups` | 查询机器组列表 | READ |
+| `cls_describe_machine_group_detail` | 获取机器组详情 | READ |
+| `cls_describe_dashboards` | 查询仪表盘列表 | READ |
+| `cls_describe_regions` | 查询支持的地域 | READ |
+| `cls_create_logset` | 创建日志集 | WRITE |
+| `cls_create_topic` | 创建日志主题 | WRITE |
+| `cls_modify_topic` | 修改日志主题 | WRITE |
+| `cls_modify_index` | 修改索引配置 | WRITE |
+| `cls_delete_logset` | 删除日志集 | DANGER |
+| `cls_delete_topic` | 删除日志主题 | DANGER |
+
+**数据加工（1 个只读 + 1 个写入 + 1 个危险）**
+
+| 工具名称 | 功能说明 | 权限 |
+|---------|---------|------|
+| `cls_describe_data_transform_tasks` | 查询数据加工任务 | READ |
+| `cls_create_data_transform` | 创建数据加工任务 | WRITE |
+| `cls_delete_data_transform` | 删除数据加工任务 | DANGER |
+
+**定时 SQL（1 个只读 + 1 个写入 + 1 个危险）**
+
+| 工具名称 | 功能说明 | 权限 |
+|---------|---------|------|
+| `cls_describe_scheduled_sql_tasks` | 查询定时 SQL 任务 | READ |
+| `cls_create_scheduled_sql` | 创建定时 SQL 任务 | WRITE |
+| `cls_delete_scheduled_sql` | 删除定时 SQL 任务 | DANGER |
+
+**时间工具（1 个）**
+
+| 工具名称 | 功能说明 | 权限 |
+|---------|---------|------|
+| `cls_convert_time` | 时间与时间戳互转 | READ |
+
+#### 常见场景示例
+
+**场景一：只做日志查询分析**
+
+```bash
+CLS_ENABLED_TOOLS="cls_search_log,cls_get_log_context,cls_get_log_histogram,cls_get_log_count,cls_describe_search_syntax,cls_convert_time"
+```
+
+适合：日常日志排查、问题定位。
+
+**场景二：只做告警监控**
+
+```bash
+CLS_ENABLED_TOOLS="cls_describe_alarms,cls_describe_alarm_detail,cls_describe_alarm_notices,cls_describe_alarm_records,cls_get_alarm_detail"
+```
+
+适合：告警值班、告警分析。
+
+**场景三：日志查询 + 资源浏览**
+
+```bash
+CLS_ENABLED_TOOLS="cls_search_log,cls_get_log_context,cls_get_log_count,cls_describe_topics,cls_describe_logsets,cls_describe_index,cls_describe_regions,cls_convert_time"
+```
+
+适合：需要先浏览有哪些日志主题，再查询日志内容。
+
+**场景四：指标查询**
+
+```bash
+CLS_ENABLED_TOOLS="cls_query_metric,cls_query_range_metric,cls_list_metrics,cls_convert_time"
+```
+
+适合：只做时序指标分析。
+
+**场景五：全功能（默认）**
+
+不设置 `CLS_ENABLED_TOOLS`，或设为空字符串。
+
+#### 注意事项
+
+1. **白名单与权限是 AND 关系**：工具同时满足白名单和权限等级才会被注册。例如 `cls_create_alarm` 即使在白名单中，也需要 `CLS_ENABLE_WRITE=true` 才会注册
+2. **工具名必须完全匹配**：填写了不存在的工具名，启动时会在日志中输出警告（`⚠️ Unknown tool names in CLS_ENABLED_TOOLS`），但不影响其他工具正常注册
+3. **建议搭配 `cls_convert_time`**：日志查询和指标查询都需要时间戳参数，建议白名单中包含 `cls_convert_time` 工具
+4. **Docker / K8s 配置**：在 Docker 环境变量或 K8s ConfigMap 中设置即可，与其他环境变量用法相同
+
+```bash
+# Docker
+docker run -e CLS_ENABLED_TOOLS="cls_search_log,cls_get_log_context" ...
+
+# docker-compose.yaml
+environment:
+  CLS_ENABLED_TOOLS: "cls_search_log,cls_get_log_context,cls_convert_time"
+```
+
+### 稳定性配置（重试 & 熔断）
+
+Server 内置了自动重试和熔断保护机制，应对网络抖动和后端服务异常，默认配置适合大多数场景。
+
+#### 重试机制
+
+当 SDK 调用因网络超时或服务端临时错误失败时，自动进行指数退避重试：
+
+| 环境变量 | 默认值 | 说明 |
+|----------|--------|------|
+| `CLS_REQUEST_TIMEOUT` | `60` | 单次 SDK 请求超时（秒） |
+| `CLS_RETRY_MAX_ATTEMPTS` | `3` | 最大尝试次数（含首次），设为 `1` 可禁用重试 |
+| `CLS_RETRY_BASE_DELAY` | `1.0` | 基础退避延迟（秒），第 N 次重试延迟约为 `base_delay * 2^(N-1)` + 随机抖动 |
+
+```bash
+# 增大超时和重试次数（网络不稳定的环境）
+CLS_REQUEST_TIMEOUT=120
+CLS_RETRY_MAX_ATTEMPTS=5
+CLS_RETRY_BASE_DELAY=2.0
+
+# 禁用重试（调试用）
+CLS_RETRY_MAX_ATTEMPTS=1
+```
+
+#### 熔断器
+
+当某个工具连续失败达到阈值时，自动触发熔断——后续调用直接返回错误而不实际请求后端，避免雪崩。熔断一段时间后自动进入半开状态尝试恢复。
+
+| 环境变量 | 默认值 | 说明 |
+|----------|--------|------|
+| `CLS_CB_FAILURE_THRESHOLD` | `5` | 连续失败多少次后触发熔断 |
+| `CLS_CB_RECOVERY_TIMEOUT` | `30` | 熔断后多少秒进入半开状态尝试恢复 |
+
+```bash
+# 更敏感的熔断（3 次失败就熔断，15 秒后尝试恢复）
+CLS_CB_FAILURE_THRESHOLD=3
+CLS_CB_RECOVERY_TIMEOUT=15
+```
 
 ### 多地域配置
 
