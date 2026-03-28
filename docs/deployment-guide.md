@@ -403,14 +403,16 @@ curl http://localhost:8000/readiness
 
 **第一步：将源码上传到服务器**
 
-Git clone（网络好的情况下）：
+Git clone（推荐，支持后续一键升级）：
 
 ```bash
 git clone <repo-url> /tmp/cls-mcp-server
 cd /tmp/cls-mcp-server
 ```
 
-或者 **tar.gz 打包上传**（推荐，避免 git clone 慢的问题）：
+> **提示**：使用 git clone 方式安装后，安装目录会保留 `.git` 信息，后续可通过 `install.sh --upgrade` 一键升级。
+
+或者 **tar.gz 打包上传**（网络差时使用）：
 
 ```bash
 # === 在开发机上执行 ===
@@ -1191,19 +1193,55 @@ uv sync
 
 **systemd 服务模式：**
 
+方式一：一键升级（推荐）
+
 ```bash
-# 上传新版本代码
+# 在安装目录执行升级脚本，自动完成 git pull + 依赖更新 + 重启
+sudo bash /opt/cls-mcp-server/deploy/systemd/install.sh --upgrade
+```
+
+脚本自动执行：
+1. 在安装目录 `git pull` 拉取最新代码
+2. `uv sync` 同步 Python 依赖
+3. `systemctl restart` 重启服务
+4. 健康检查验证
+
+> **注意**：`.env` 配置文件在升级过程中**不会被修改**，你的密钥和配置保持不变。
+>
+> **前提**：首次安装时需使用 `git clone` 方式上传源码（而非 tar.gz），这样安装目录才有 `.git` 信息支持 `--upgrade`。如果是 tar.gz 方式安装的，升级时需重新上传 tar.gz 并重跑 `install.sh`（不加 `--upgrade`），`.env` 同样不会被覆盖。
+
+方式二：手动升级
+
+```bash
 cd /opt/cls-mcp-server
 
-# 更新源码（git 方式）
-sudo git pull
-sudo uv sync --frozen
+# 配置 safe.directory（首次手动操作需要，避免 git 报 dubious ownership）
+sudo git config --global --add safe.directory /opt/cls-mcp-server
 
-# 或上传新 tar.gz 后重新安装依赖
-sudo uv sync --frozen
+# 拉取最新代码（用服务用户执行，保持文件权限一致）
+sudo -u cls-mcp git pull
+
+# 更新依赖
+sudo -u cls-mcp bash -c "export UV_PYTHON_INSTALL_DIR=/opt/cls-mcp-server/.python && cd /opt/cls-mcp-server && uv sync --frozen --python 3.12"
 
 # 重启服务
 sudo systemctl restart cls-mcp-server
+
+# 验证
+sudo systemctl status cls-mcp-server
+curl http://127.0.0.1:8000/health
+```
+
+> **权限说明**：安装目录 owner 是 `cls-mcp` 服务用户，手动操作 git/uv 时建议用 `sudo -u cls-mcp` 执行，避免产生 root 所有的文件导致服务运行时权限问题。
+
+**Docker 部署模式：**
+
+```bash
+# 拉取最新镜像
+docker pull ghcr.io/tinker-lgd2026/cls-mcp-server:latest
+
+# 重启容器
+docker compose down && docker compose up -d
 ```
 
 ### 卸载

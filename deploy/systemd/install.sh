@@ -3,9 +3,10 @@
 # CLS MCP Server - CentOS 7+ 一键部署脚本
 # ============================================================
 # 用法:
-#   sudo bash install.sh
+#   sudo bash install.sh                              # 首次安装
 #   sudo bash install.sh --install-dir /opt/cls-mcp-server
 #   sudo bash install.sh --port 9000 --region ap-shanghai
+#   sudo bash install.sh --upgrade                    # 升级（git pull + 依赖更新 + 重启）
 # ============================================================
 set -euo pipefail
 
@@ -15,6 +16,9 @@ INSTALL_DIR="/opt/cls-mcp-server"
 SERVICE_NAME="cls-mcp-server"
 SERVICE_USER="cls-mcp"
 SERVICE_GROUP="cls-mcp"
+
+# 运行模式
+UPGRADE_MODE=false
 
 # 服务运行参数（可通过命令行覆盖）
 CLS_PORT="${CLS_PORT:-8000}"
@@ -51,6 +55,7 @@ die() { log_error "$*"; exit 1; }
 parse_args() {
     while [[ $# -gt 0 ]]; do
         case $1 in
+            --upgrade)      UPGRADE_MODE=true;  shift ;;
             --install-dir)  INSTALL_DIR="$2";   shift 2 ;;
             --port)         CLS_PORT="$2";      shift 2 ;;
             --host)         CLS_HOST="$2";      shift 2 ;;
@@ -58,6 +63,10 @@ parse_args() {
             --transport)    CLS_TRANSPORT="$2"; shift 2 ;;
             --help|-h)
                 echo "用法: sudo bash install.sh [选项]"
+                echo ""
+                echo "模式:"
+                echo "  (无参数)            首次安装模式"
+                echo "  --upgrade           升级模式（git pull + 更新依赖 + 重启服务）"
                 echo ""
                 echo "选项:"
                 echo "  --install-dir DIR   安装目录 (默认: /opt/cls-mcp-server)"
@@ -353,7 +362,6 @@ setup_project() {
         # 只复制运行所需的文件，排除不必要的内容
         log_info "复制项目文件到 ${INSTALL_DIR}..."
         rsync -a --delete \
-            --exclude='.git' \
             --exclude='.gitignore' \
             --exclude='.dockerignore' \
             --exclude='.codebuddy' \
@@ -553,6 +561,116 @@ EOF
     log_info "已设置开机自启"
 }
 
+# ======================== 升级模式 ========================
+
+do_upgrade() {
+    echo ""
+    echo "============================================================"
+    echo " CLS MCP Server 升级模式"
+    echo "============================================================"
+    echo ""
+
+    # 前置检查：安装目录存在
+    if [[ ! -d "$INSTALL_DIR" ]]; then
+        die "安装目录 ${INSTALL_DIR} 不存在，请先执行首次安装: sudo bash install.sh"
+    fi
+
+    # 前置检查：.git 目录存在
+    if [[ ! -d "${INSTALL_DIR}/.git" ]]; then
+        die "未找到 ${INSTALL_DIR}/.git 目录，无法使用 git pull 升级。\n  可能是旧版本安装（rsync 排除了 .git），请重新执行首次安装: sudo bash install.sh"
+    fi
+
+    # 前置检查：服务用户存在
+    if ! id "$SERVICE_USER" &>/dev/null; then
+        die "服务用户 ${SERVICE_USER} 不存在，请先执行首次安装"
+    fi
+
+    # 前置检查：uv 可用
+    if ! find_uv; then
+        die "未找到 uv，请确认已安装"
+    fi
+
+    # 配置 git safe.directory（兜底：防止 root 执行 git 命令时报 dubious ownership）
+    git config --global --add safe.directory "$INSTALL_DIR" 2>/dev/null || true
+
+    cd "$INSTALL_DIR"
+
+    # 记录升级前版本
+    local old_version
+    old_version=$(git describe --tags --always 2>/dev/null || echo "unknown")
+    log_info "当前版本: ${old_version}"
+
+    # Step 1: git pull
+    log_step "拉取最新代码..."
+    if sudo -u "$SERVICE_USER" git pull; then
+        log_info "代码更新成功"
+    else
+        die "git pull 失败，请检查网络或 git 仓库配置"
+    fi
+
+    local new_version
+    new_version=$(git describe --tags --always 2>/dev/null || echo "unknown")
+    log_info "更新后版本: ${new_version}"
+
+    # Step 2: uv sync（更新依赖）
+    log_step "同步 Python 依赖..."
+
+    # 如果官方 PyPI 不可达，配置国内镜像源
+    if ! curl -sf --connect-timeout 3 https://pypi.org >/dev/null 2>&1; then
+        if curl -sf --connect-timeout 3 https://pypi.tuna.tsinghua.edu.cn >/dev/null 2>&1; then
+            export UV_INDEX_URL="https://pypi.tuna.tsinghua.edu.cn/simple"
+            log_info "使用清华镜像: $UV_INDEX_URL"
+        elif curl -sf --connect-timeout 3 https://mirrors.aliyun.com >/dev/null 2>&1; then
+            export UV_INDEX_URL="https://mirrors.aliyun.com/pypi/simple"
+            log_info "使用阿里镜像: $UV_INDEX_URL"
+        fi
+    fi
+
+    export UV_PYTHON_INSTALL_DIR="${INSTALL_DIR}/.python"
+    if sudo -u "$SERVICE_USER" bash -c "export UV_PYTHON_INSTALL_DIR='${INSTALL_DIR}/.python'; export UV_INDEX_URL='${UV_INDEX_URL:-}'; cd '${INSTALL_DIR}' && uv sync --frozen --python ${PYTHON_VERSION}"; then
+        log_info "依赖同步成功"
+    else
+        die "uv sync 失败，请检查依赖配置"
+    fi
+
+    # Step 3: 重启服务
+    log_step "重启服务..."
+    if systemctl restart "$SERVICE_NAME"; then
+        sleep 2
+        if systemctl is-active --quiet "$SERVICE_NAME"; then
+            log_info "服务重启成功"
+        else
+            log_error "服务重启后未正常运行，查看日志:"
+            journalctl -u "$SERVICE_NAME" --no-pager -n 20
+            exit 1
+        fi
+    else
+        die "服务重启失败"
+    fi
+
+    # 健康检查
+    sleep 1
+    if curl -sf "http://127.0.0.1:${CLS_PORT}/health" >/dev/null 2>&1; then
+        log_info "健康检查通过"
+    else
+        log_warn "健康检查端点暂未响应（服务可能正在启动中）"
+    fi
+
+    echo ""
+    echo "============================================================"
+    echo " CLS MCP Server 升级完成"
+    echo "============================================================"
+    echo ""
+    echo "  版本变更:  ${old_version} → ${new_version}"
+    echo "  安装目录:  ${INSTALL_DIR}"
+    echo "  .env 文件: 未修改（保持原有配置）"
+    echo ""
+    echo "  查看状态:  sudo systemctl status ${SERVICE_NAME}"
+    echo "  查看日志:  sudo journalctl -u ${SERVICE_NAME} -f"
+    echo ""
+    echo "============================================================"
+}
+
 # ======================== 启动与验证 ========================
 
 start_and_verify() {
@@ -644,14 +762,21 @@ print_summary() {
 
 main() {
     parse_args "$@"
+    check_root
 
+    # 升级模式：跳过初始化步骤，直接执行 git pull + uv sync + restart
+    if $UPGRADE_MODE; then
+        do_upgrade
+        return 0
+    fi
+
+    # 安装模式：完整安装流程
     echo ""
     echo "============================================================"
     echo " CLS MCP Server 一键部署脚本"
     echo "============================================================"
     echo ""
 
-    check_root
     check_os
     check_dependencies
     check_network
