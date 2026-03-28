@@ -1069,22 +1069,22 @@ CLS_CB_RECOVERY_TIMEOUT=15
 
 ### 多地域配置
 
-每个 CLS MCP Server 实例绑定一个地域。如需管理多个地域的资源，部署多个实例并配置不同的 `CLS_REGION`：
+**单实例即可管理所有地域**。每个工具函数都支持 `region` 可选参数，调用时指定即可动态切换地域，无需部署多个实例。
+
+**工作原理**：
+- `CLS_REGION` 环境变量设置默认地域（不传 `region` 参数时使用）
+- 工具调用时传入 `region` 参数可覆盖默认地域，如 `region="ap-shanghai"`
+- 不同地域的 SDK Client 按 `(secret_id, secret_key, region)` 缓存，互不混淆，线程安全
 
 ```bash
-# 广州地域实例
-CLS_REGION=ap-guangzhou CLS_PORT=8001 cls-mcp-server --transport streamable-http
+# 只需部署一个实例，设置默认地域即可
+CLS_REGION=ap-guangzhou cls-mcp-server --transport streamable-http
 
-# 上海地域实例
-CLS_REGION=ap-shanghai CLS_PORT=8002 cls-mcp-server --transport streamable-http
+# 调用工具时通过 region 参数查询其他地域
+# 例如：cls_search_log(topic_id="xxx", query="*", region="ap-shanghai")
 ```
 
-K8s 中可通过不同 Release 名称部署多个实例：
-
-```bash
-helm install cls-gz deploy/helm/cls-mcp-server --set config.region=ap-guangzhou
-helm install cls-sh deploy/helm/cls-mcp-server --set config.region=ap-shanghai
-```
+> **注意**：多地域访问要求所配置的密钥（SecretId/SecretKey）对目标地域拥有相应权限。
 
 ### 日志级别调优
 
