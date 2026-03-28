@@ -170,10 +170,12 @@ async def cls_delete_logset(
 - limit: 每页条数，默认 20
 - logset_id: 按日志集 ID 过滤（可选）
 - topic_name: 按日志主题名称过滤（可选，模糊匹配）
+- biz_type: 主题类型过滤（可选）：0 表示日志主题，1 表示指标主题（时序数据主题）。不传则返回所有类型。当需要查询指标主题时，请传入 biz_type=1
 - region: 地域（可选），如 ap-guangzhou、na-ashburn，不传则使用默认地域，可通过 cls_describe_regions 查询所有可用地域
 
 ### 返回信息
 - 日志主题 ID、名称、所属日志集
+- 主题类型（日志主题/指标主题）
 - 存储类型、保存周期、分区数
 - 采集和索引状态""",
 )
@@ -183,6 +185,7 @@ async def cls_describe_topics(
     limit: int = 20,
     logset_id: str = "",
     topic_name: str = "",
+    biz_type: int | None = None,
     region: str = "",
 ) -> str:
     """查询日志主题列表"""
@@ -207,10 +210,15 @@ async def cls_describe_topics(
     if filters:
         req.Filters = filters
 
+    if biz_type is not None:
+        req.BizType = biz_type
+
     resp = await asyncio.to_thread(client.DescribeTopics, req)
 
     if not resp.Topics:
         return "📭 未找到日志主题"
+
+    _BIZ_TYPE_MAP = {0: "日志主题", 1: "指标主题"}
 
     items = []
     for topic in resp.Topics:
@@ -219,6 +227,8 @@ async def cls_describe_topics(
             "名称": topic.TopicName,
             "日志集ID": topic.LogsetId,
         }
+        if hasattr(topic, "BizType") and topic.BizType is not None:
+            item["主题类型"] = _BIZ_TYPE_MAP.get(topic.BizType, f"未知({topic.BizType})")
         if hasattr(topic, "Period") and topic.Period is not None:
             item["保存天数"] = topic.Period
         if hasattr(topic, "PartitionCount") and topic.PartitionCount is not None:
@@ -272,8 +282,10 @@ async def cls_describe_topic_detail(
     parts.append(f"  名称: {topic.TopicName}")
     parts.append(f"  日志集ID: {topic.LogsetId}")
 
+    _BIZ_TYPE_MAP = {0: "日志主题", 1: "指标主题"}
+
     optional_fields = [
-        ("Period", "保存天数"), ("PartitionCount", "分区数"),
+        ("BizType", "主题类型"), ("Period", "保存天数"), ("PartitionCount", "分区数"),
         ("Status", "状态"), ("StorageType", "存储类型"),
         ("AutoSplit", "自动分裂"), ("MaxSplitPartitions", "最大分裂数"),
         ("CreateTime", "创建时间"), ("Describes", "描述"),
@@ -283,6 +295,8 @@ async def cls_describe_topic_detail(
             value = getattr(topic, field)
             if field == "Status":
                 value = "正常" if value is True or value == 1 else "关闭"
+            elif field == "BizType":
+                value = _BIZ_TYPE_MAP.get(value, f"未知({value})")
             parts.append(f"  {label}: {value}")
 
     if hasattr(topic, "Tags") and topic.Tags:
