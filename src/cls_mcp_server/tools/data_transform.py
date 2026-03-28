@@ -158,6 +158,9 @@ async def cls_create_data_transform(
 ### 参数说明
 - task_id: 数据加工任务 ID（必填）
 - region: 地域（可选），如 ap-guangzhou、na-ashburn，不传则使用默认地域，可通过 cls_describe_regions 查询所有可用地域""",
+)
+@handle_api_error
+async def cls_delete_data_transform(
     task_id: str,
     region: str = "",
 ) -> str:

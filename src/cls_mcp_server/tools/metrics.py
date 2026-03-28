@@ -183,4 +183,9 @@ async def cls_list_metrics(
     parts.append("")
 
     if values:
-        for name in sorted(val
+        for name in sorted(values):
+            parts.append(f"  - {name}")
+    else:
+        parts.append("（该时间范围内无指标数据）")
+
+    return "\n".join(parts)
