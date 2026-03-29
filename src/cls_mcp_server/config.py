@@ -58,6 +58,11 @@ class ServerConfig:
     cb_failure_threshold: int = 5     # 连续失败多少次后触发熔断
     cb_recovery_timeout: int = 30     # 熔断后多少秒进入半开状态尝试恢复
 
+    # Text2CQL LLM 配置
+    llm_api_base: str = ""
+    llm_api_key: str = ""
+    llm_model: str = ""
+
     # 工具白名单（为空则注册全部工具）
     enabled_tools: frozenset[str] = field(default_factory=frozenset)
 
@@ -106,6 +111,9 @@ class ServerConfig:
             retry_base_delay=cls._safe_float(os.getenv("CLS_RETRY_BASE_DELAY", "1.0"), 1.0),
             cb_failure_threshold=cls._safe_int(os.getenv("CLS_CB_FAILURE_THRESHOLD", "5"), 5),
             cb_recovery_timeout=cls._safe_int(os.getenv("CLS_CB_RECOVERY_TIMEOUT", "30"), 30),
+            llm_api_base=os.getenv("CLS_LLM_API_BASE", "").strip(),
+            llm_api_key=os.getenv("CLS_LLM_API_KEY", "").strip(),
+            llm_model=os.getenv("CLS_LLM_MODEL", "").strip(),
             enabled_tools=enabled_tools,
         )
 
@@ -163,3 +171,11 @@ class ServerConfig:
             if self.transport == "streamable-http":
                 logger.info("  Stateless:  %s", "YES" if self.stateless_http else "NO")
             logger.info("  Auth:       %s", "ENABLED (Bearer Token)" if self.auth_token else "DISABLED (no token set)")
+        # Text2CQL LLM 配置
+        if self.llm_api_base and self.llm_model:
+            masked_key = (
+                f"{self.llm_api_key[:4]}****" if len(self.llm_api_key) > 4 else "****"
+            )
+            logger.info("  LLM:        %s (model: %s, key: %s)", self.llm_api_base, self.llm_model, masked_key)
+        else:
+            logger.info("  LLM:        NOT CONFIGURED (cls_text_to_cql generate mode disabled)")

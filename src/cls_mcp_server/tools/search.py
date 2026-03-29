@@ -407,16 +407,18 @@ async def cls_get_log_count(
     return "📊 无法获取日志数量，请检查查询条件"
 
 
-@cls_tool(
-    name="cls_describe_search_syntax",
-    level=ToolLevel.READ,
-    description="""获取 CLS 日志检索语法参考。返回 CQL（CLS Query Language）的完整语法说明和常用查询模板。
-
-调用此工具不需要任何参数，适合在不确定如何编写查询语句时使用。""",
-)
-@handle_api_error
+# --- 已废弃：cls_describe_search_syntax 已被 cls_text_to_cql 替代 ---
+# 保留代码便于回滚，仅注释掉 @cls_tool 装饰器使其不再注册
+# @cls_tool(
+#     name="cls_describe_search_syntax",
+#     level=ToolLevel.READ,
+#     description="""获取 CLS 日志检索语法参考。返回 CQL（CLS Query Language）的完整语法说明和常用查询模板。
+#
+# 调用此工具不需要任何参数，适合在不确定如何编写查询语句时使用。""",
+# )
+# @handle_api_error
 async def cls_describe_search_syntax() -> str:
-    """返回 CQL 语法参考"""
+    """返回 CQL 语法参考（已废弃，保留用于回滚）"""
     return f"""# CLS 日志检索语法参考（CQL）
 {CQL_SYNTAX_GUIDE}
 

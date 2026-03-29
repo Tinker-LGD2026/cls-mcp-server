@@ -148,6 +148,16 @@ def run_server(config: ServerConfig) -> None:
             )
             starlette_app = mcp.streamable_http_app()
 
+        # 注册 shutdown 事件：优雅关闭 LLM httpx 连接池
+        @starlette_app.on_event("shutdown")
+        async def _shutdown_llm_client() -> None:
+            logger.info("HTTP server shutting down, closing shared httpx client...")
+            try:
+                from cls_mcp_server.tools.text_to_cql.llm_client import close_shared_client
+                await close_shared_client()
+            except Exception:
+                pass
+
         # 条件性挂载 Bearer Token 认证中间件
         if config.auth_token:
             starlette_app.add_middleware(
@@ -186,6 +196,17 @@ def _setup_signal_handlers() -> None:
         logger.info("Received SIGTERM, initiating graceful shutdown...")
         from cls_mcp_server.auth import clear_client_cache
         clear_client_cache()
+        # 关闭 LLM httpx 共享连接池（尽力而为，信号处理器中无法 await）
+        try:
+            from cls_mcp_server.tools.text_to_cql.llm_client import close_shared_client
+            import asyncio
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                loop.create_task(close_shared_client())
+            else:
+                loop.run_until_complete(close_shared_client())
+        except Exception:
+            pass
         raise SystemExit(0)
 
     signal.signal(signal.SIGTERM, _handle_sigterm)
