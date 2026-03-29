@@ -1,6 +1,6 @@
 [project]
 name = "cls-mcp-server"
-version = "0.2.1"
+version = "0.3.0"
 description = "腾讯云 CLS 日志服务 MCP Server - 从可观测性视角为 AI 助手提供全方位日志服务能力"
 license = { text = "Apache-2.0" }
 readme = "README.md"
@@ -41,6 +41,11 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/cls_mcp_server"]
+
+[tool.pytest.ini_options]
+markers = [
+    "integration: integration tests requiring external LLM services (need LKEAP_API_KEY)",
+]
 
 [tool.ruff]
 target-version = "py310"
