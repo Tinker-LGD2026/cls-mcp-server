@@ -30,10 +30,8 @@ from cls_mcp_server.utils.validators import (
 
 logger = logging.getLogger(__name__)
 
-# 语法参考文档路径：优先从包内 reference/ 目录加载（pip 安装场景），
-# 其次从项目根 reference/ 目录加载（源码开发场景）
-_SYNTAX_DOC_PATH_PKG = Path(__file__).resolve().parent.parent / "reference" / "cls_extension_syntax.md"
-_SYNTAX_DOC_PATH_ROOT = Path(__file__).resolve().parent.parent.parent.parent / "reference" / "cls_extension_syntax.md"
+# 语法参考文档路径：从包内 reference/ 目录加载
+_SYNTAX_DOC_PATH = Path(__file__).resolve().parent.parent / "reference" / "cls_extension_syntax.md"
 
 
 # ============================================================
@@ -42,17 +40,25 @@ _SYNTAX_DOC_PATH_ROOT = Path(__file__).resolve().parent.parent.parent.parent / "
 CQL_SYNTAX_GUIDE = """
 ## CQL 语法速查
 
+CQL (CLS Query Language) 是 CLS 自研的检索分析语法，语句结构为：`[检索条件] | [SQL 语句]`。
+检索条件用于过滤日志，SQL 用于统计分析。不需要分析时可省略 `|` 及 SQL 部分。
+
 ### 检索语法
-- 关键词: `error`、`"connection timeout"`（精确短语）
-- 字段匹配: `status:200`、`level:ERROR`
-- 逻辑: `AND`/`OR`/`NOT`（大写）
-- 范围: `response_time:>1000`、`code:[400 TO 499]`
-- 通配: `path:/api/*`（仅尾部）
+- **键值检索**: `status:404`、`level:ERROR`（字段值包含该词）
+- **全文检索**: `error`、`timeout`（全文中包含该词）
+- **短语检索**: `"connection timeout"` 或 `'user_name:"bob"'`（精确短语，支持通配符如 `"/var/log/acc*.log"`）
+- **逻辑操作符**: `AND`、`OR`、`NOT`（不区分大小写，AND 优先级高于 OR）
+- **分组**: `level:(ERROR OR WARNING) AND pid:1234`
+- **数值比较**: `status:>400`、`status:>=400`、`status:=200`、`latency:<100`
+- **模糊匹配**: `host:www.test*.com`（`*` 匹配零到多个字符，不支持前缀模糊如 `*test`）
+- **字段存在性**: `key:*`（字段存在）、`key:""`（字段存在但值为空）
+- **转义**: `body:user_name\\:bob`（特殊字符用 `\\` 转义）
 
 ### SQL 分析（检索条件 | SQL，无需 FROM 和分号）
-- 字符串用单引号，字段名冲突用双引号
+- 字符串用单引号 `''`，字段名冲突用双引号 `""`
 - `* | SELECT COUNT(*) AS total`
 - `* | SELECT status, COUNT(*) AS cnt GROUP BY status ORDER BY cnt DESC`
+- 默认返回 100 行，LIMIT 最大 100 万行
 
 ### CLS 扩展函数
 - **histogram**（时间分桶）: `histogram(__TIMESTAMP__, interval 1 hour)` — 直接传 LONG 型，自动 UTC+8
@@ -62,6 +68,8 @@ CQL_SYNTAX_GUIDE = """
 - **百分位**: `APPROX_PERCENTILE(field, 0.99)`
 
 ### 关键注意
+- CQL 是 CLS 推荐语法（SyntaxRule=1），相比 Lucene 更简便，特殊字符限制更少
+- CQL 中多个分词默认为 AND 关系（Lucene 默认为 OR）
 - `__TIMESTAMP__` 是 bigint 毫秒时间戳，`from_unixtime` 要除 1000
 - 脏数据用 `try_cast` 代替 `cast`
 - 时区：histogram/time_series 传 LONG 型自动 UTC+8，其他日期函数默认 UTC+0，需手动加 8 小时
@@ -126,7 +134,7 @@ async def cls_search_log(
 
     # 原始日志结果
     if resp.Results:
-        parts.append(format_log_results(resp.Results, list_over=resp.ListOver))
+        parts.append(format_log_results(resp.Results, list_over=bool(resp.ListOver)))
 
     # SQL 分析结果
     if resp.AnalysisResults:
@@ -414,35 +422,35 @@ async def cls_get_log_count(
 @cls_tool(
     name="cls_describe_search_syntax",
     level=ToolLevel.READ,
-    description="""CQL 语法参考与 CLS 扩展函数文档。当 cls_search_log 执行报错或不确定如何编写复杂查询语句时使用。
+    description="""CQL 检索分析语法完整参考文档。当 cls_search_log 执行报错或不确定如何编写查询语句时使用。
 
-返回 CLS 完整的扩展语法参考文档，包含：
-- histogram（时间分桶）、time_series（时序补全）、compare（同环比）等扩展函数的完整语法和示例
+返回 CLS CQL 完整语法参考文档，包含：
+- CQL 检索语法（键值检索、短语检索、逻辑操作符、数值比较、模糊匹配、字段存在性等）
+- CQL 与 Lucene 语法的核心区别
+- SQL 分析语法（管道符、FROM 省略、引号规则等）
+- histogram（时间分桶）、time_series（时序补全）、compare（同环比）等 CLS 扩展函数
 - IP 地理函数、百分位数函数等特殊函数
 - 时区处理规则、脏数据处理、类型转换等关键注意事项
-- 常见查询模板和最佳实践
 
 调用此工具不需要任何参数。""",
 )
 @handle_api_error
 async def cls_describe_search_syntax() -> str:
     """返回 CLS 完整扩展语法参考文档"""
-    # 优先从包内目录加载（pip 安装场景），其次从项目根目录加载（源码开发场景）
-    for doc_path in (_SYNTAX_DOC_PATH_PKG, _SYNTAX_DOC_PATH_ROOT):
-        try:
-            return doc_path.read_text(encoding="utf-8")
-        except FileNotFoundError:
-            continue
+    try:
+        return _SYNTAX_DOC_PATH.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        pass
 
     logger.warning("语法参考文档未找到，已降级为精简版本")
-    return f"""# CLS 日志检索语法参考（CQL）
+    return f"""# CLS CQL 检索分析语法参考
 {CQL_SYNTAX_GUIDE}
 
 ## 额外说明
-- CQL 是 CLS 推荐的检索语法（SyntaxRule=1）
-- SQL 分析部分基于标准 SQL，支持大部分聚合函数和窗口函数
+- CQL (CLS Query Language) 是 CLS 自研的检索分析语法，推荐优先使用（SyntaxRule=1）
+- CQL 相比 Lucene 更简便：逻辑操作符不区分大小写、多分词默认 AND 关系、短语中支持通配符
+- SQL 分析部分基于 Trino/Presto SQL，支持聚合函数和窗口函数
 - 时间字段 __TIMESTAMP__ 为日志采集时间（毫秒级 Unix 时间戳）
-- 使用 CAST(__TIMESTAMP__ AS TIMESTAMP) 可转换为时间类型用于 histogram 聚合
 - 查询语句大小限制: 最大 10KB
-- SQL 分析结果默认最多返回 10000 行
+- SQL 分析默认返回 100 行，LIMIT 最大 100 万行
 """

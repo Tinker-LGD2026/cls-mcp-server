@@ -1,11 +1,58 @@
-# CLS SQL 扩展语法与关键注意事项
+# CLS CQL 检索分析语法完整参考
 
-> 此文档记录 CLS 相对于标准 Trino/Presto SQL 的**独有扩展**，以及标准 SQL 在 CLS 场景下的**高频易错点**。
-> 标准 SQL 函数（聚合、字符串、数学、窗口函数等）CLS 均兼容，此处不再重复。
+> CQL (CLS Query Language) 是腾讯云日志服务 CLS 自研的检索分析语法。
+> 语句结构为：`[检索条件] | [SQL 分析语句]`。检索条件用于过滤日志，SQL 用于统计分析。
+> CQL 相比 Lucene 语法更简便、特殊字符限制更少，是 CLS 推荐的默认语法（SyntaxRule=1）。
 
 ---
 
-## 1. 管道符语法 `|`
+## 1. CQL 检索语法
+
+检索条件位于管道符 `|` 左侧，用于过滤日志。如果为空或 `*`，代表查询所有日志。
+如果不需要 SQL 统计分析，可省略 `|` 及其后的 SQL 语句。
+
+### 1.1 基础语法
+
+| 语法 | 说明 | 示例 |
+|------|------|------|
+| `key:value` | 键值检索，查询字段值中包含 value 的日志 | `level:ERROR` |
+| `value` | 全文检索，查询日志全文中包含 value 的日志 | `ERROR` |
+| `AND` | "与"逻辑操作符，**不区分大小写** | `level:ERROR AND pid:1234` |
+| `OR` | "或"逻辑操作符，不区分大小写 | `level:ERROR OR level:WARNING` |
+| `NOT` | "非"逻辑操作符，不区分大小写 | `level:ERROR NOT pid:1234` |
+| `()` | 逻辑分组，控制优先级（AND 优先级高于 OR） | `level:(ERROR OR WARNING) AND pid:1234` |
+| `"..."` | 短语检索，日志需包含完整短语且顺序不变 | `name:"john Smith"` |
+| `'...'` | 短语检索，功能同 `""`，避免内部双引号转义 | `body:'user_name:"bob"'` |
+| `*` | 模糊匹配，匹配零到多个字符（**不支持前缀模糊**如 `*test`） | `host:www.test*.com` |
+| `>`, `>=`, `<`, `<=` | 数值范围操作符 | `status:>400`、`latency:>=1000` |
+| `=` | 等于操作符（数值） | `status:=200` |
+| `\\` | 转义特殊字符（空格、`:`、`*` 等） | `body:user_name\\:bob` |
+
+### 1.2 特殊检索方式
+
+- **字段存在性检查**：
+  - `key:*` — 查询字段存在的日志
+  - `key:""` — 查询字段存在但值为空的日志
+- **短语检索中的通配符**：CQL 支持在短语中使用通配符（Lucene 不支持），如 `filepath:"/var/log/acc*.log"`
+- **分词默认行为**：CQL 中多个分词默认为 **AND** 关系（Lucene 默认为 OR），更符合直觉
+  - 例：检索 `/book/user/login` 在 CQL 中等价于 `book AND user AND login`
+
+### 1.3 CQL 与 Lucene 语法的核心区别
+
+| 功能 | CQL | Lucene |
+|------|-----|--------|
+| 逻辑操作符大小写 | **不区分**（AND/and 均可） | **仅大写**（小写视为普通文本） |
+| 特殊符号转义 | 需转义的符号**较少** | 需转义的符号较多 |
+| 分词默认关系 | **AND**（更符合直觉） | **OR** |
+| 短语中通配符 | **支持** | 不支持 |
+| 数值范围 | `status:>=400 AND status:<=499` | `status:[400 TO 499]` |
+| 字段存在性 | `key:*` | `_exists_:key` |
+
+> ⚠️ CQL 和 Lucene 在 API 请求中通过 `SyntaxRule` 参数区分：`SyntaxRule=1` 为 CQL（推荐），`SyntaxRule=0` 为 Lucene。
+
+---
+
+## 2. 管道符语法 `|`
 
 CLS 使用管道符将 CQL 检索条件与 SQL 分析语句连接。
 
@@ -32,7 +79,7 @@ level:ERROR | SELECT status, COUNT(*) AS cnt GROUP BY status ORDER BY cnt DESC
 
 ---
 
-## 2. SQL 分析前提条件与限制
+## 3. SQL 分析前提条件与限制
 
 ### 前提条件
 1. **标准存储**：日志必须接入**标准存储**，低频存储不支持 SQL 分析
@@ -58,7 +105,7 @@ level:ERROR | SELECT status, COUNT(*) AS cnt GROUP BY status ORDER BY cnt DESC
 
 ---
 
-## 3. 时区规则（⚠️ 高频踩坑点）
+## 4. 时区规则（⚠️ 高频踩坑点）
 
 CLS 中不同函数的时区行为不一致，这是最常见的错误来源。
 
@@ -124,7 +171,7 @@ CLS 中不同函数的时区行为不一致，这是最常见的错误来源。
 
 ---
 
-## 4. histogram — 时间分桶函数（CLS 重载版）
+## 5. histogram — 时间分桶函数（CLS 重载版）
 
 标准 Trino 的 `histogram` 是聚合函数（构建 MAP），CLS 将其重载为**时间分桶**函数。
 
@@ -167,7 +214,7 @@ level:ERROR | SELECT histogram(__TIMESTAMP__, interval 5 minute) as t,
 
 ---
 
-## 5. time_series — 时序补全函数
+## 6. time_series — 时序补全函数
 
 在时间维度聚合时，如果某个时间段没有数据，`histogram` 不会返回该时间点。
 `time_series` 会自动补全缺失的时间点，使时间序列连续，适合绘图场景。
@@ -224,7 +271,7 @@ level:ERROR | SELECT time_series(__TIMESTAMP__, '1h', '%Y-%m-%d %H:%i:%s', '0') 
 
 ---
 
-## 6. compare — 同环比函数
+## 7. compare — 同环比函数
 
 用于将当前时间范围的聚合结果与历史同期对比（同比/环比）。
 
@@ -306,7 +353,7 @@ compare(<aggregate_expression>, <offset1>, <offset2>, ..., <time_column>)
 
 ---
 
-## 7. IP 地理函数
+## 8. IP 地理函数
 
 CLS 提供内置的 IP 地理位置解析函数，无需额外配置。
 
@@ -356,7 +403,7 @@ CLS 提供内置的 IP 地理位置解析函数，无需额外配置。
 
 ---
 
-## 8. IP 威胁情报函数
+## 9. IP 威胁情报函数
 
 CLS 内置 IP 威胁情报查询能力。
 
@@ -383,7 +430,7 @@ CLS 内置 IP 威胁情报查询能力。
 
 ---
 
-## 9. 类型转换
+## 10. 类型转换
 
 ### cast 与 try_cast
 
@@ -417,7 +464,7 @@ date_parse(time_str, '%Y-%m-%d %H:%i:%s')
 
 ---
 
-## 10. 日期时间函数（高频使用）
+## 11. 日期时间函数（高频使用）
 
 ### from_unixtime
 
@@ -501,7 +548,7 @@ hour(cast(__TIMESTAMP__ as timestamp))
 
 ---
 
-## 11. 条件表达式
+## 12. 条件表达式
 
 ```sql
 -- CASE WHEN
@@ -524,7 +571,7 @@ hour(cast(__TIMESTAMP__ as timestamp))
 
 ---
 
-## 12. JSON 函数
+## 13. JSON 函数
 
 ```sql
 -- 提取 JSON 字段值（返回 JSON 类型）
@@ -542,7 +589,7 @@ json_extract_scalar(json_field, '$.user.name')
 
 ---
 
-## 13. 估算函数
+## 14. 估算函数
 
 ```sql
 -- 近似去重计数（比 COUNT(DISTINCT) 更快，适合大数据量）
@@ -556,7 +603,7 @@ json_extract_scalar(json_field, '$.user.name')
 
 ---
 
-## 14. URL 函数
+## 15. URL 函数
 
 ```sql
 -- 提取 URL 各部分
@@ -569,7 +616,7 @@ json_extract_scalar(json_field, '$.user.name')
 
 ---
 
-## 15. 正则函数
+## 16. 正则函数
 
 ```sql
 -- 正则匹配判断
@@ -586,7 +633,7 @@ json_extract_scalar(json_field, '$.user.name')
 
 ---
 
-## 16. 内置字段
+## 17. 内置字段
 
 CLS 提供以下内置字段，在 SQL 分析中可直接使用：
 
@@ -598,7 +645,7 @@ CLS 提供以下内置字段，在 SQL 分析中可直接使用：
 
 ---
 
-## 17. 通用注意事项
+## 18. 通用注意事项
 
 1. **FROM 子句**：CLS SQL 不需要写 `FROM`，默认从管道符左侧的检索结果中分析
 2. **默认返回行数**：默认 100 行，最大 100 万行

@@ -1,6 +1,6 @@
 [project]
 name = "cls-mcp-server"
-version = "0.3.0"
+version = "0.3.1"
 description = "腾讯云 CLS 日志服务 MCP Server - 从可观测性视角为 AI 助手提供全方位日志服务能力"
 license = { text = "Apache-2.0" }
 readme = "README.md"
@@ -58,3 +58,18 @@ select = ["E", "F", "W", "I", "N", "UP", "B", "A", "SIM"]
 
 [tool.ruff.format]
 quote-style = "double"
+
+[tool.basedpyright]
+pythonVersion = "3.10"
+typeCheckingMode = "basic"
+reportMissingTypeStubs = false
+reportUnknownMemberType = false
+reportUnknownVariableType = false
+reportUnknownArgumentType = false
+reportUnknownParameterType = false
+reportAny = false
+reportExplicitAny = false
+reportImportCycles = false
+reportAttributeAccessIssue = false
+reportUntypedFunctionDecorator = false
+reportUnusedVariable = "warning"
