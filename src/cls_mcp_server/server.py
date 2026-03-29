@@ -17,6 +17,7 @@ from mcp.server.fastmcp import FastMCP
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 
+from cls_mcp_server import __version__
 from cls_mcp_server.config import ServerConfig
 from cls_mcp_server.middleware import BearerTokenAuthMiddleware
 from cls_mcp_server.tools.registry import register_all_tools
@@ -24,8 +25,8 @@ from cls_mcp_server.utils.stability import init_stability
 
 logger = logging.getLogger(__name__)
 
-# 服务版本号，健康检查和运维使用
-SERVER_VERSION = "0.1.0"
+# 服务版本号，从包 __init__ 统一管理，健康检查和运维使用
+server_version = __version__
 
 
 def _inject_config(config: ServerConfig) -> None:
@@ -51,7 +52,7 @@ def _register_health_routes(mcp: FastMCP, config: ServerConfig) -> None:
     async def health_check(request: Request) -> JSONResponse:
         return JSONResponse({
             "status": "ok",
-            "version": SERVER_VERSION,
+            "version": server_version,
             "transport": config.transport,
         })
 
@@ -148,16 +149,6 @@ def run_server(config: ServerConfig) -> None:
             )
             starlette_app = mcp.streamable_http_app()
 
-        # 注册 shutdown 事件：优雅关闭 LLM httpx 连接池
-        @starlette_app.on_event("shutdown")
-        async def _shutdown_llm_client() -> None:
-            logger.info("HTTP server shutting down, closing shared httpx client...")
-            try:
-                from cls_mcp_server.tools.text_to_cql.llm_client import close_shared_client
-                await close_shared_client()
-            except Exception:
-                pass
-
         # 条件性挂载 Bearer Token 认证中间件
         if config.auth_token:
             starlette_app.add_middleware(
@@ -196,17 +187,6 @@ def _setup_signal_handlers() -> None:
         logger.info("Received SIGTERM, initiating graceful shutdown...")
         from cls_mcp_server.auth import clear_client_cache
         clear_client_cache()
-        # 关闭 LLM httpx 共享连接池（尽力而为，信号处理器中无法 await）
-        try:
-            from cls_mcp_server.tools.text_to_cql.llm_client import close_shared_client
-            import asyncio
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                loop.create_task(close_shared_client())
-            else:
-                loop.run_until_complete(close_shared_client())
-        except Exception:
-            pass
         raise SystemExit(0)
 
     signal.signal(signal.SIGTERM, _handle_sigterm)

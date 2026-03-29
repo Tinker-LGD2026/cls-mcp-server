@@ -185,7 +185,7 @@ class TestParseHumanReadable:
 
 class TestClsConvertTime:
     def _run(self, **kwargs) -> str:
-        return asyncio.get_event_loop().run_until_complete(cls_convert_time(**kwargs))
+        return asyncio.run(cls_convert_time(**kwargs))
 
     def test_no_params(self):
         result = self._run()

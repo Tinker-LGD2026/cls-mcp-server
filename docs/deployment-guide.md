@@ -702,7 +702,7 @@ docker run -d \
 ```bash
 # 存活检查
 curl http://localhost:8000/health
-# 返回: {"status":"ok","version":"0.1.0","transport":"streamable-http"}
+# 返回: {"status":"ok","version":"0.3.0","transport":"streamable-http"}
 
 # 就绪检查
 curl http://localhost:8000/readiness
@@ -1198,7 +1198,7 @@ git config --global http.proxy http://your-proxy:port
 
 ### 10.1 PyPI 发布
 
-**触发条件**：推送 `v*` 格式的 Tag（如 `v0.1.0`）
+**触发条件**：推送 `v*` 格式的 Tag（如 `v0.3.0`）
 
 **所需 Secrets**：
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from pathlib import Path
 
 from tencentcloud.cls.v20201016 import models
 
@@ -29,62 +30,65 @@ from cls_mcp_server.utils.validators import (
 
 logger = logging.getLogger(__name__)
 
+# 语法参考文档路径：优先从包内 reference/ 目录加载（pip 安装场景），
+# 其次从项目根 reference/ 目录加载（源码开发场景）
+_SYNTAX_DOC_PATH_PKG = Path(__file__).resolve().parent.parent / "reference" / "cls_extension_syntax.md"
+_SYNTAX_DOC_PATH_ROOT = Path(__file__).resolve().parent.parent.parent.parent / "reference" / "cls_extension_syntax.md"
+
 
 # ============================================================
 # CQL 语法参考（嵌入到 Tool 描述中，引导 LLM 生成查询）
 # ============================================================
 CQL_SYNTAX_GUIDE = """
-## CQL 语法参考（CLS Query Language）
+## CQL 语法速查
 
-### 基础检索语法
-- 关键词搜索: `error` 或 `"connection timeout"`（精确短语）
-- 字段匹配: `status:200`、`level:ERROR`、`host:"10.0.0.1"`
-- 通配符: `path:/api/v1/*`（仅支持尾部通配）
-- 范围查询: `response_time:>1000`、`code:[400 TO 499]`
-- 逻辑运算: `AND`、`OR`、`NOT`（大写），如 `level:ERROR AND status:500`
-- 分组: `(level:ERROR OR level:WARN) AND service:gateway`
-- 存在性: `_EXISTS_:stack_trace`（字段存在的日志）
+### 检索语法
+- 关键词: `error`、`"connection timeout"`（精确短语）
+- 字段匹配: `status:200`、`level:ERROR`
+- 逻辑: `AND`/`OR`/`NOT`（大写）
+- 范围: `response_time:>1000`、`code:[400 TO 499]`
+- 通配: `path:/api/*`（仅尾部）
 
-### SQL 管道分析（在检索条件后用 | 连接）
-- 格式: `[检索条件] | [SQL语句]`
-- 统计: `* | SELECT COUNT(*) AS total`
-- 分组: `* | SELECT status, COUNT(*) AS cnt GROUP BY status ORDER BY cnt DESC`
-- TopN: `level:ERROR | SELECT service, COUNT(*) AS cnt GROUP BY service ORDER BY cnt DESC LIMIT 10`
-- 时间聚合: `* | SELECT histogram(cast(__TIMESTAMP__ as timestamp), interval 1 hour) as t, COUNT(*) as cnt GROUP BY t ORDER BY t`
-- 百分位: `* | SELECT APPROX_PERCENTILE(response_time, 0.99) AS p99`
+### SQL 分析（检索条件 | SQL，无需 FROM 和分号）
+- 字符串用单引号，字段名冲突用双引号
+- `* | SELECT COUNT(*) AS total`
+- `* | SELECT status, COUNT(*) AS cnt GROUP BY status ORDER BY cnt DESC`
 
-### 常用查询模板
-1. 查看错误日志: `level:ERROR`
-2. 某服务的慢请求: `service:order-api AND response_time:>2000`
-3. 统计各状态码分布: `* | SELECT status, COUNT(*) AS cnt GROUP BY status`
-4. 统计每小时错误量: `level:ERROR | SELECT histogram(cast(__TIMESTAMP__ as timestamp), interval 1 hour) as t, COUNT(*) as cnt GROUP BY t ORDER BY t`
+### CLS 扩展函数
+- **histogram**（时间分桶）: `histogram(__TIMESTAMP__, interval 1 hour)` — 直接传 LONG 型，自动 UTC+8
+- **time_series**（时序补全）: `time_series(__TIMESTAMP__, '5m', '%Y-%m-%d %H:%i:%s', '0')` — 必须 GROUP BY + ORDER BY，不支持 DESC，分钟用 %i
+- **compare**（同环比）: `compare(count(*), 86400)` — 返回数组下标从 1 开始，86400=日/604800=周
+- **IP 地理**: `ip_to_province/city/country/provider(ip)`
+- **百分位**: `APPROX_PERCENTILE(field, 0.99)`
+
+### 关键注意
+- `__TIMESTAMP__` 是 bigint 毫秒时间戳，`from_unixtime` 要除 1000
+- 脏数据用 `try_cast` 代替 `cast`
+- 时区：histogram/time_series 传 LONG 型自动 UTC+8，其他日期函数默认 UTC+0，需手动加 8 小时
 """
 
 
 @cls_tool(
     name="cls_search_log",
     level=ToolLevel.READ,
-    description=f"""检索分析 CLS 日志。支持 CQL 语法检索和 SQL 管道分析。
-
-使用 CQL 语法（推荐），通过关键词、字段条件、逻辑运算检索日志，可用 | 连接 SQL 语句做聚合分析。
+    description=f"""检索分析 CLS 日志。支持 CQL 检索和 SQL 管道分析。
 
 {CQL_SYNTAX_GUIDE}
 
 ### 参数说明
 - topic_id: 日志主题 ID（必填）
 - query: CQL 检索语句（必填），如 `level:ERROR` 或 `* | SELECT COUNT(*) as cnt`
-- start_time: 起始时间，Unix 时间戳（毫秒），如 1700000000000
+- start_time: 起始时间，Unix 时间戳（毫秒）
 - end_time: 结束时间，Unix 时间戳（毫秒）
 - limit: 返回条数，默认 100，最大 1000（仅对原始日志有效，SQL 分析不受此限制）
 - context: 翻页游标，首次查询无需传入，从上次返回结果获取
 - sort: 排序方式，asc（升序）或 desc（降序，默认）
 
 ### 注意事项
-- 时间范围不宜过大，建议按需缩小范围以提高查询效率
-- SQL 分析语句中可使用 __TIMESTAMP__ 表示日志时间戳字段
 - ⏰ **start_time/end_time 为毫秒时间戳，请先调用 cls_convert_time 工具转换，不要手动计算**
-- 💡 **编写 SQL 分析语句前，建议先调用 cls_describe_index 获取目标主题的索引配置，确认字段名称、类型及是否开启统计，避免因字段信息不明确导致查询失败**
-- region: 地域（可选），如 ap-guangzhou、na-ashburn，不传则使用默认地域，可通过 cls_describe_regions 查询所有可用地域""",
+- 💡 **编写 SQL 分析语句前，建议先调用 cls_describe_index 获取索引配置，确认字段名称和类型**
+- ❌ **CQL 执行报错时，可调用 cls_describe_search_syntax 获取 CLS 完整扩展语法参考文档**
+- region: 地域（可选），如 ap-guangzhou、na-ashburn，不传则使用默认地域""",
 )
 @handle_api_error
 async def cls_search_log(
@@ -407,18 +411,30 @@ async def cls_get_log_count(
     return "📊 无法获取日志数量，请检查查询条件"
 
 
-# --- 已废弃：cls_describe_search_syntax 已被 cls_text_to_cql 替代 ---
-# 保留代码便于回滚，仅注释掉 @cls_tool 装饰器使其不再注册
-# @cls_tool(
-#     name="cls_describe_search_syntax",
-#     level=ToolLevel.READ,
-#     description="""获取 CLS 日志检索语法参考。返回 CQL（CLS Query Language）的完整语法说明和常用查询模板。
-#
-# 调用此工具不需要任何参数，适合在不确定如何编写查询语句时使用。""",
-# )
-# @handle_api_error
+@cls_tool(
+    name="cls_describe_search_syntax",
+    level=ToolLevel.READ,
+    description="""CQL 语法参考与 CLS 扩展函数文档。当 cls_search_log 执行报错或不确定如何编写复杂查询语句时使用。
+
+返回 CLS 完整的扩展语法参考文档，包含：
+- histogram（时间分桶）、time_series（时序补全）、compare（同环比）等扩展函数的完整语法和示例
+- IP 地理函数、百分位数函数等特殊函数
+- 时区处理规则、脏数据处理、类型转换等关键注意事项
+- 常见查询模板和最佳实践
+
+调用此工具不需要任何参数。""",
+)
+@handle_api_error
 async def cls_describe_search_syntax() -> str:
-    """返回 CQL 语法参考（已废弃，保留用于回滚）"""
+    """返回 CLS 完整扩展语法参考文档"""
+    # 优先从包内目录加载（pip 安装场景），其次从项目根目录加载（源码开发场景）
+    for doc_path in (_SYNTAX_DOC_PATH_PKG, _SYNTAX_DOC_PATH_ROOT):
+        try:
+            return doc_path.read_text(encoding="utf-8")
+        except FileNotFoundError:
+            continue
+
+    logger.warning("语法参考文档未找到，已降级为精简版本")
     return f"""# CLS 日志检索语法参考（CQL）
 {CQL_SYNTAX_GUIDE}
 

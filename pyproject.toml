@@ -44,8 +44,10 @@ packages = ["src/cls_mcp_server"]
 
 [tool.pytest.ini_options]
 markers = [
-    "integration: integration tests requiring external LLM services (need LKEAP_API_KEY)",
+    "integration: integration tests requiring external services",
 ]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 
 [tool.ruff]
 target-version = "py310"

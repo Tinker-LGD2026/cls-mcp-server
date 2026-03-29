@@ -273,7 +273,7 @@ docker run -d \
 
 ```bash
 curl http://localhost:8000/health
-# 预期输出: {"status":"ok","version":"0.1.0","transport":"streamable-http"}
+# 预期输出: {"status":"ok","version":"0.3.0","transport":"streamable-http"}
 ```
 
 #### 方式二：一键部署脚本（适合无 Docker 的虚拟机）

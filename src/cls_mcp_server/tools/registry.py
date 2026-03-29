@@ -148,4 +148,4 @@ def _import_tool_modules() -> None:
     import cls_mcp_server.tools.resource  # noqa: F401
     import cls_mcp_server.tools.data_transform  # noqa: F401
     import cls_mcp_server.tools.scheduled_sql  # noqa: F401
-    import cls_mcp_server.tools.text_to_cql.tool_definition  # noqa: F401
+

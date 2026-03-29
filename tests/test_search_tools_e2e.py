@@ -37,8 +37,7 @@ from conftest import (
 
 def _run(coro):
     """同步执行异步函数"""
-    loop = asyncio.get_event_loop()
-    return loop.run_until_complete(coro)
+    return asyncio.run(coro)
 
 
 # ============================================================
