@@ -25,7 +25,6 @@ def format_timestamp(ts: int | float) -> str:
 def format_timestamp_ms(ts: int | float) -> str:
     """将毫秒时间戳转换为 YYYY-mm-dd HH:MM:SS.FFF 格式（UTC+8）
 
-    用于生成 cls_get_log_context 所需的 btime 参数格式。
     """
     try:
         ts_ms = int(ts)

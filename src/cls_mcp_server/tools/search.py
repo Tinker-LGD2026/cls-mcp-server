@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 from tencentcloud.cls.v20201016 import models
@@ -29,6 +30,19 @@ from cls_mcp_server.utils.validators import (
 )
 
 logger = logging.getLogger(__name__)
+
+# CLS API BTime 参数要求固定 UTC+8 时区
+_UTC8 = timezone(timedelta(hours=8))
+
+
+def _format_btime_utc8(ts_ms: int) -> str:
+    """毫秒时间戳 → UTC+8 字符串（CLS API BTime 专用）
+
+    CLS DescribeLogContext API 要求 BTime 为 UTC+8 时区的
+    YYYY-mm-dd HH:MM:SS.FFF 格式字符串，不能依赖系统本地时区。
+    """
+    dt = datetime.fromtimestamp(ts_ms / 1000, tz=_UTC8)
+    return dt.strftime("%Y-%m-%d %H:%M:%S") + f".{ts_ms % 1000:03d}"
 
 # 语法参考文档路径：从包内 reference/ 目录加载
 _SYNTAX_DOC_PATH = Path(__file__).resolve().parent.parent / "reference" / "cls_extension_syntax.md"
@@ -171,9 +185,9 @@ async def cls_search_log(
 
 ### 参数说明
 - topic_id: 日志主题 ID（必填）
-- btime: 目标日志的时间，支持两种格式：
-  1. **Unix 毫秒时间戳**（如 `1774537847429`）：工具内部自动转换为所需格式，可直接使用 cls_search_log 返回的"时间"对应的毫秒时间戳
-  2. **字符串格式** `YYYY-mm-dd HH:MM:SS.FFF`（如 `2026-03-25 14:25:00.000`，UTC+8 时区）：用户自行构造的时间字符串
+- btime: 目标日志的时间（字符串），支持两种格式：
+  1. **毫秒时间戳字符串**（如 `"1774537847429"`）：工具内部自动按 UTC+8 时区转换为所需格式，可直接使用 cls_search_log 返回的"时间（Time）"对应的毫秒时间戳
+  2. **UTC+8 时间字符串** `YYYY-mm-dd HH:MM:SS.FFF`（如 `"2026-03-25 14:25:00.000"`）：需确保为 UTC+8 时区
 - pkg_id: 目标日志的包序号（从 cls_search_log 返回的 PkgId 字段获取）
 - pkg_log_id: 目标日志在包内的序号（从 cls_search_log 返回的 PkgLogId 字段获取）
 - prev_logs: 向前获取的日志条数，默认 10，最大 100
@@ -181,11 +195,12 @@ async def cls_search_log(
 
 ### 使用流程
 1. 先用 cls_search_log 查找目标日志
-2. 从结果中获取 PkgId、PkgLogId，以及"时间"对应的毫秒时间戳（或自行构造 btime 字符串）
+2. 从结果中获取 PkgId、PkgLogId，以及"时间"对应的毫秒时间戳（或自行构造 UTC+8 时间字符串）
 3. 用这些信息调用本工具获取上下文
 
 ### 注意事项
-- 支持传入毫秒时间戳（纯数字）或 `YYYY-mm-dd HH:MM:SS.FFF` 格式字符串
+- btime 的时间字符串必须为 UTC+8 时区
+- 传入毫秒时间戳字符串时，工具会自动按 UTC+8 转换，无需手动处理时区
 - 毫秒精度会影响定位准确性，建议尽量使用精确的时间值
 - region: 地域（可选），如 ap-guangzhou、na-ashburn，不传则使用默认地域，可通过 cls_describe_regions 查询所有可用地域""",
 )
@@ -205,10 +220,10 @@ async def cls_get_log_context(
     config = get_config()
     client = get_cls_client(config, region=region or None)
 
-    # 自动检测 btime 格式：若为纯数字（毫秒时间戳），自动转换为 YYYY-mm-dd HH:MM:SS.FFF
+    # 自动检测 btime 格式：若为纯数字（毫秒时间戳字符串），强制按 UTC+8 转换为 YYYY-mm-dd HH:MM:SS.FFF
     btime_str = str(btime).strip()
     if btime_str.isdigit():
-        btime_str = format_timestamp_ms(int(btime_str))
+        btime_str = _format_btime_utc8(int(btime_str))
 
     req = models.DescribeLogContextRequest()
     req.TopicId = topic_id
