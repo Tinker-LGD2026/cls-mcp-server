@@ -11,6 +11,7 @@ import logging
 from tencentcloud.cls.v20201016 import models
 
 from cls_mcp_server.auth import get_cls_client
+from cls_mcp_server.tools._constants import TOPIC_ID_FILTER_HINT
 from cls_mcp_server.tools._state import get_config
 from cls_mcp_server.tools.registry import ToolLevel, cls_tool
 from cls_mcp_server.utils.errors import handle_api_error, parse_json_param
@@ -22,13 +23,13 @@ logger = logging.getLogger(__name__)
 @cls_tool(
     name="cls_describe_data_transform_tasks",
     level=ToolLevel.READ,
-    description="""查询数据加工任务列表。数据加工用于对日志数据进行清洗、转换、分发等处理。
+    description=f"""查询数据加工任务列表。数据加工用于对日志数据进行清洗、转换、分发等处理。
 
 ### 参数说明
 - offset: 分页偏移量，默认 0
 - limit: 每页条数，默认 20
 - task_name: 按任务名称过滤（可选）
-- topic_id: 按源日志主题 ID 过滤（可选）
+- topic_id: 按源日志主题 ID 过滤（可选）。{TOPIC_ID_FILTER_HINT}
 - region: 地域（可选），如 ap-guangzhou、na-ashburn，不传则使用默认地域，可通过 cls_describe_regions 查询所有可用地域
 
 ### 返回信息

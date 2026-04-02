@@ -14,6 +14,7 @@ import httpx
 from tencentcloud.cls.v20201016 import models
 
 from cls_mcp_server.auth import get_cls_client
+from cls_mcp_server.tools._constants import TOPIC_ID_FILTER_HINT
 from cls_mcp_server.tools._state import get_config
 from cls_mcp_server.tools.registry import ToolLevel, cls_tool
 from cls_mcp_server.utils.errors import handle_api_error, parse_json_param
@@ -30,13 +31,13 @@ logger = logging.getLogger(__name__)
 @cls_tool(
     name="cls_describe_alarms",
     level=ToolLevel.READ,
-    description="""查询告警策略列表。获取当前账号下的告警策略信息，支持分页和过滤。
+    description=f"""查询告警策略列表。获取当前账号下的告警策略信息，支持分页和过滤。
 
 ### 参数说明
 - offset: 分页偏移量，默认 0
 - limit: 每页条数，默认 20，最大 100
 - name: 按告警策略名称过滤（可选，模糊匹配）
-- topic_id: 按关联日志主题 ID 过滤（可选）
+- topic_id: 按关联日志主题 ID 过滤（可选）。{TOPIC_ID_FILTER_HINT}
 - region: 地域（可选），如 ap-guangzhou、na-ashburn，不传则使用默认地域，可通过 cls_describe_regions 查询所有可用地域
 
 ### 返回信息
@@ -225,7 +226,7 @@ async def cls_describe_alarm_notices(
 @cls_tool(
     name="cls_describe_alarm_records",
     level=ToolLevel.READ,
-    description="""查询告警历史记录。查看最近的告警触发记录，了解告警发生的时间、原因和处理状态。
+    description=f"""查询告警历史记录。查看最近的告警触发记录，了解告警发生的时间、原因和处理状态。
 
 ### 参数说明
 - start_time: 起始时间，Unix 时间戳（毫秒），如 1700000000000（必填）
@@ -233,7 +234,7 @@ async def cls_describe_alarm_notices(
 - offset: 分页偏移量，默认 0
 - limit: 每页条数，默认 20
 - alarm_id: 按告警策略 ID 过滤（可选）
-- topic_id: 按监控对象（日志主题）ID 过滤（可选）
+- topic_id: 按监控对象（日志主题）ID 过滤（可选）。{TOPIC_ID_FILTER_HINT}
 - status: 按告警状态过滤（可选）：0=未恢复，1=已恢复，2=已失效
 - alarm_level: 按告警等级过滤（可选）：0=警告，1=提醒，2=紧急
 

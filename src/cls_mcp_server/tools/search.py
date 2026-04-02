@@ -14,6 +14,7 @@ from pathlib import Path
 from tencentcloud.cls.v20201016 import models
 
 from cls_mcp_server.auth import get_cls_client
+from cls_mcp_server.tools._constants import TOPIC_ID_HINT
 from cls_mcp_server.tools._state import get_config
 from cls_mcp_server.tools.registry import ToolLevel, cls_tool
 from cls_mcp_server.utils.errors import handle_api_error
@@ -360,10 +361,10 @@ async def cls_get_log_histogram(
 @cls_tool(
     name="cls_get_log_count",
     level=ToolLevel.READ,
-    description="""快速获取日志数量。相比 cls_search_log 更快，适合只需要知道日志总数的场景。
+    description=f"""快速获取日志数量。相比 cls_search_log 更快，适合只需要知道日志总数的场景。
 
 ### 参数说明
-- topic_id: 日志主题 ID（必填）
+- topic_id: {TOPIC_ID_HINT}
 - query: CQL 检索语句（必填）
 - start_time: 起始时间，Unix 时间戳（毫秒）
 - end_time: 结束时间，Unix 时间戳（毫秒）

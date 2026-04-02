@@ -509,6 +509,10 @@ setup_env_file() {
 # 生成时间: $(date '+%Y-%m-%d %H:%M:%S')
 # ==============================
 # !! 重要: 请替换下方密钥为真实值 !!
+# !! 注意: 值不要用引号包裹（systemd 不会自动去引号）!!
+# !! 正确: CLS_REGION=ap-guangzhou                     !!
+# !! 错误: CLS_REGION="ap-guangzhou"                   !!
+# ==============================
 
 # [必填] 腾讯云 API 密钥
 CLS_SECRET_ID=<请替换为你的SecretId>
@@ -517,7 +521,7 @@ CLS_SECRET_KEY=<请替换为你的SecretKey>
 # [必填] 地域
 CLS_REGION=${CLS_REGION}
 
-# [可选] 传输方式
+# [可选] 传输方式: stdio | sse | streamable-http
 CLS_TRANSPORT=${CLS_TRANSPORT}
 
 # [可选] 监听配置
@@ -534,6 +538,21 @@ CLS_ENABLE_DANGEROUS=false
 # [可选] HTTP Bearer Token 认证（建议生产环境开启）
 # 设置后，客户端请求需带 Authorization: Bearer <token> 头
 # MCP_AUTH_TOKEN=your-secret-token-here
+
+# [可选] SDK 请求超时（秒），默认 60
+CLS_REQUEST_TIMEOUT=60
+
+# [可选] 重试配置
+CLS_RETRY_MAX_ATTEMPTS=3
+CLS_RETRY_BASE_DELAY=1.0
+
+# [可选] 熔断器配置
+CLS_CB_FAILURE_THRESHOLD=5
+CLS_CB_RECOVERY_TIMEOUT=30
+
+# [可选] 工具白名单（逗号分隔，不要加引号），为空则注册全部工具
+# 示例: CLS_ENABLED_TOOLS=cls_search_log,cls_get_log_histogram,cls_describe_topics
+# CLS_ENABLED_TOOLS=
 
 # [可选] 日志级别
 CLS_LOG_LEVEL=INFO

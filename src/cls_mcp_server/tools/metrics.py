@@ -11,6 +11,7 @@ import logging
 from tencentcloud.cls.v20201016 import models
 
 from cls_mcp_server.auth import get_cls_client
+from cls_mcp_server.tools._constants import METRIC_TOPIC_ID_HINT
 from cls_mcp_server.tools._state import get_config
 from cls_mcp_server.tools.registry import ToolLevel, cls_tool
 from cls_mcp_server.utils.errors import handle_api_error
@@ -80,10 +81,10 @@ async def cls_query_metric(
 @cls_tool(
     name="cls_query_range_metric",
     level=ToolLevel.READ,
-    description="""查询 CLS 指标数据（时间范围）。支持 PromQL 兼容查询语法，获取一段时间内的指标变化趋势。
+    description=f"""查询 CLS 指标数据（时间范围）。支持 PromQL 兼容查询语法，获取一段时间内的指标变化趋势。
 
 ### 参数说明
-- topic_id: 指标主题 ID（必填），注意是时序指标主题 ID，非普通日志主题 ID
+- topic_id: {METRIC_TOPIC_ID_HINT}
 - query: 指标查询语句（必填），PromQL 兼容语法
 - start_time: 起始时间，Unix 时间戳（秒）
 - end_time: 结束时间，Unix 时间戳（秒）

@@ -8,13 +8,33 @@ from __future__ import annotations
 import logging
 import os
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Literal
 
 from dotenv import load_dotenv
 
-load_dotenv()
-
 logger = logging.getLogger(__name__)
+
+
+def _find_dotenv_path() -> Path | None:
+    """查找 .env 文件，优先工作目录，其次项目根目录。
+
+    搜索顺序：
+    1. os.getcwd()/.env — systemd WorkingDirectory 场景
+    2. 项目根目录/.env — 本地开发场景（config.py 向上 3 级）
+    """
+    # 1. 工作目录（systemd WorkingDirectory=/opt/cls-mcp-server）
+    cwd_env = Path.cwd() / ".env"
+    if cwd_env.is_file():
+        return cwd_env
+
+    # 2. 项目根目录（src/cls_mcp_server/config.py → 向上 3 级）
+    project_root = Path(__file__).resolve().parent.parent.parent
+    root_env = project_root / ".env"
+    if root_env.is_file():
+        return root_env
+
+    return None
 
 # 支持的传输方式
 TransportType = Literal["stdio", "sse", "streamable-http"]
@@ -72,17 +92,42 @@ class ServerConfig:
         """向后兼容旧配置名"""
         return self.port
 
+    @staticmethod
+    def _strip_quotes(value: str) -> str:
+        """去除值两端的引号
+
+        systemd EnvironmentFile 不会自动去除引号，
+        例如 CLS_ENABLED_TOOLS="a,b,c" 在 systemd 中值会包含引号。
+        python-dotenv 会自动去引号，但 systemd 不会，这里做防御性处理。
+        """
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+            return value[1:-1]
+        return value
+
     @classmethod
     def from_env(cls) -> ServerConfig:
         """从环境变量加载配置
 
         向后兼容：CLS_SSE_HOST/CLS_SSE_PORT 作为 CLS_HOST/CLS_PORT 的回退
-        """
-        host = os.getenv("CLS_HOST") or os.getenv("CLS_SSE_HOST", "0.0.0.0")
-        port_str = os.getenv("CLS_PORT") or os.getenv("CLS_SSE_PORT", "8000")
 
-        # 解析工具白名单
-        enabled_tools_raw = os.getenv("CLS_ENABLED_TOOLS", "").strip()
+        注意：所有字符串值都经过 _strip_quotes() 处理，
+        以兼容 systemd EnvironmentFile 不去引号的问题。
+        """
+        # 加载 .env 文件（override=True 确保覆盖 systemd EnvironmentFile 注入的旧值）
+        dotenv_path = _find_dotenv_path()
+        if dotenv_path is not None:
+            load_dotenv(dotenv_path=dotenv_path, override=True)
+            logger.info(".env loaded: %s", dotenv_path)
+        else:
+            logger.warning(".env not found (searched cwd=%s and project root)", Path.cwd())
+
+        _sq = cls._strip_quotes
+
+        host = _sq(os.getenv("CLS_HOST") or os.getenv("CLS_SSE_HOST", "0.0.0.0"))
+        port_str = _sq(os.getenv("CLS_PORT") or os.getenv("CLS_SSE_PORT", "8000"))
+
+        # 解析工具白名单（先去引号，再按逗号分割）
+        enabled_tools_raw = _sq(os.getenv("CLS_ENABLED_TOOLS", "")).strip()
         enabled_tools = (
             frozenset(t.strip() for t in enabled_tools_raw.split(",") if t.strip())
             if enabled_tools_raw
@@ -90,22 +135,22 @@ class ServerConfig:
         )
 
         return cls(
-            secret_id=os.getenv("CLS_SECRET_ID", ""),
-            secret_key=os.getenv("CLS_SECRET_KEY", ""),
-            region=os.getenv("CLS_REGION", "ap-guangzhou"),
-            transport=os.getenv("CLS_TRANSPORT", "stdio"),  # type: ignore[arg-type]
+            secret_id=_sq(os.getenv("CLS_SECRET_ID", "")),
+            secret_key=_sq(os.getenv("CLS_SECRET_KEY", "")),
+            region=_sq(os.getenv("CLS_REGION", "ap-guangzhou")),
+            transport=_sq(os.getenv("CLS_TRANSPORT", "stdio")),  # type: ignore[arg-type]
             host=host,
             port=cls._safe_int(port_str, 8000),
-            stateless_http=os.getenv("CLS_STATELESS_HTTP", "true").lower() == "true",
-            enable_write=os.getenv("CLS_ENABLE_WRITE", "false").lower() == "true",
-            enable_dangerous=os.getenv("CLS_ENABLE_DANGEROUS", "false").lower() == "true",
-            auth_token=os.getenv("MCP_AUTH_TOKEN") or None,
-            log_level=os.getenv("CLS_LOG_LEVEL", "INFO"),
-            request_timeout=cls._safe_int(os.getenv("CLS_REQUEST_TIMEOUT", "60"), 60),
-            retry_max_attempts=cls._safe_int(os.getenv("CLS_RETRY_MAX_ATTEMPTS", "3"), 3),
-            retry_base_delay=cls._safe_float(os.getenv("CLS_RETRY_BASE_DELAY", "1.0"), 1.0),
-            cb_failure_threshold=cls._safe_int(os.getenv("CLS_CB_FAILURE_THRESHOLD", "5"), 5),
-            cb_recovery_timeout=cls._safe_int(os.getenv("CLS_CB_RECOVERY_TIMEOUT", "30"), 30),
+            stateless_http=_sq(os.getenv("CLS_STATELESS_HTTP", "true")).lower() == "true",
+            enable_write=_sq(os.getenv("CLS_ENABLE_WRITE", "false")).lower() == "true",
+            enable_dangerous=_sq(os.getenv("CLS_ENABLE_DANGEROUS", "false")).lower() == "true",
+            auth_token=_sq(os.getenv("MCP_AUTH_TOKEN", "")) or None,
+            log_level=_sq(os.getenv("CLS_LOG_LEVEL", "INFO")),
+            request_timeout=cls._safe_int(_sq(os.getenv("CLS_REQUEST_TIMEOUT", "60")), 60),
+            retry_max_attempts=cls._safe_int(_sq(os.getenv("CLS_RETRY_MAX_ATTEMPTS", "3")), 3),
+            retry_base_delay=cls._safe_float(_sq(os.getenv("CLS_RETRY_BASE_DELAY", "1.0")), 1.0),
+            cb_failure_threshold=cls._safe_int(_sq(os.getenv("CLS_CB_FAILURE_THRESHOLD", "5")), 5),
+            cb_recovery_timeout=cls._safe_int(_sq(os.getenv("CLS_CB_RECOVERY_TIMEOUT", "30")), 30),
             enabled_tools=enabled_tools,
         )
 

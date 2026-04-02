@@ -17,6 +17,7 @@ from tencentcloud.region.v20220627 import region_client as region_sdk_client
 from tencentcloud.region.v20220627 import models as region_models
 
 from cls_mcp_server.auth import get_cls_client
+from cls_mcp_server.tools._constants import TOPIC_ID_HINT
 from cls_mcp_server.tools._state import get_config
 from cls_mcp_server.tools.registry import ToolLevel, cls_tool
 from cls_mcp_server.utils.errors import handle_api_error, parse_json_param
@@ -411,10 +412,10 @@ async def cls_modify_topic(
 @cls_tool(
     name="cls_delete_topic",
     level=ToolLevel.DANGER,
-    description="""删除日志主题。删除后该主题下的所有日志数据将被清除，不可恢复。
+    description=f"""删除日志主题。删除后该主题下的所有日志数据将被清除，不可恢复。
 
 ### 参数说明
-- topic_id: 日志主题 ID（必填）
+- topic_id: {TOPIC_ID_HINT}
 - region: 地域（可选），如 ap-guangzhou、na-ashburn，不传则使用默认地域，可通过 cls_describe_regions 查询所有可用地域""",
 )
 @handle_api_error
